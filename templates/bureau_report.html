@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bureau Report - {{ report.meta.customer_id|mask_id }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .header-meta span {
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .section h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .summary-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box p {
+            margin: 0;
+            color: #444;
+            white-space: pre-line;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .info-item {
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .info-item .value.risk {
+            color: #e74c3c;
+        }
+
+        .info-item .value.safe {
+            color: #27ae60;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .amount {
+            text-align: right;
+            font-family: 'Consolas', monospace;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .secured-yes {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .secured-no {
+            color: #e67e22;
+            font-weight: 600;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #999;
+            font-size: 11px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+            .section {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Bureau Tradeline Report</h1>
+        <div class="header-meta">
+            <span><strong>Customer ID:</strong> {{ report.meta.customer_id|mask_id }}</span>
+            <span><strong>Generated:</strong> {{ report.meta.generated_at[:10] }}</span>
+            <span><strong>Currency:</strong> {{ report.meta.currency }}</span>
+            <span><strong>Tradelines:</strong> {{ report.executive_inputs.total_tradelines }}</span>
+        </div>
+    </div>
+
+    <!-- Portfolio Summary -->
+    <div class="section">
+        <h3>Portfolio Summary</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Live Tradelines</label>
+                <div class="value">{{ report.executive_inputs.live_tradelines }}</div>
+            </div>
+            <div class="info-item">
+                <label>Closed Tradelines</label>
+                <div class="value">{{ report.executive_inputs.closed_tradelines }}</div>
+            </div>
+            <div class="info-item">
+                <label>Total Exposure</label>
+                <div class="value">{{ "{:,.0f}".format(report.executive_inputs.total_exposure) }}</div>
+            </div>
+            <div class="info-item">
+                <label>Total Outstanding</label>
+                <div class="value">{{ "{:,.0f}".format(report.executive_inputs.total_outstanding) }}</div>
+            </div>
+            <div class="info-item">
+                <label>Unsecured Exposure</label>
+                <div class="value">{{ "{:,.0f}".format(report.executive_inputs.unsecured_exposure) }}</div>
+            </div>
+            <div class="info-item">
+                <label>Delinquency</label>
+                <div class="value {% if report.executive_inputs.has_delinquency %}risk{% else %}safe{% endif %}">
+                    {{ "Yes" if report.executive_inputs.has_delinquency else "No" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Max DPD</label>
+                <div class="value {% if report.executive_inputs.max_dpd and report.executive_inputs.max_dpd > 30 %}risk{% endif %}">
+                    {{ report.executive_inputs.max_dpd if report.executive_inputs.max_dpd is not none else "N/A" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Executive Summary (LLM narrative) -->
+    {% if report.narrative %}
+    <div class="section">
+        <h3>Executive Summary</h3>
+        <div class="summary-box">
+            <p>{{ report.narrative }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Product-wise Breakdown Table -->
+    {% if vectors_data %}
+    <div class="section">
+        <h3>Product-wise Breakdown</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Loan Type</th>
+                    <th class="center">Secured</th>
+                    <th class="center">Count</th>
+                    <th class="center">Live</th>
+                    <th class="center">Closed</th>
+                    <th class="amount">Sanctioned</th>
+                    <th class="amount">Outstanding</th>
+                    <th class="center">Max DPD</th>
+                    <th class="center">Util %</th>
+                    <th class="center">On-Us</th>
+                    <th class="center">Off-Us</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vec in vectors_data %}
+                <tr>
+                    <td>{{ vec.loan_type_display }}</td>
+                    <td class="center {% if vec.secured %}secured-yes{% else %}secured-no{% endif %}">
+                        {{ "Yes" if vec.secured else "No" }}
+                    </td>
+                    <td class="center">{{ vec.loan_count }}</td>
+                    <td class="center">{{ vec.live_count }}</td>
+                    <td class="center">{{ vec.closed_count }}</td>
+                    <td class="amount">{{ "{:,.0f}".format(vec.total_sanctioned_amount) }}</td>
+                    <td class="amount">{{ "{:,.0f}".format(vec.total_outstanding_amount) }}</td>
+                    <td class="center">{{ vec.max_dpd if vec.max_dpd is not none else "-" }}</td>
+                    <td class="center">{{ "{:.0f}".format(vec.utilization_ratio) if vec.utilization_ratio is not none else "-" }}</td>
+                    <td class="center">{{ vec.on_us_count }}</td>
+                    <td class="center">{{ vec.off_us_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Generated on {{ report.meta.generated_at[:10] }} | Currency: {{ report.meta.currency }}</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,186 @@
+"""Bureau PDF renderer - BureauReport to PDF/HTML conversion.
+
+Parallel to pdf_renderer.py for customer reports.
+Reuses ReportPDF class and _sanitize_text helper.
+
+NO LLM calls - NO data manipulation - just rendering.
+"""
+
+from dataclasses import asdict
+from pathlib import Path
+from typing import Optional
+
+from jinja2 import Environment, FileSystemLoader
+from fpdf import FPDF
+
+from schemas.bureau_report import BureauReport
+from schemas.loan_type import SECURED_LOAN_TYPES
+from pipeline.pdf_renderer import ReportPDF, _sanitize_text
+from utils.helpers import mask_customer_id
+
+
+class BureauReportPDF(ReportPDF):
+    """Custom PDF class for bureau reports — overrides header only."""
+
+    def header(self):
+        self.set_font("Helvetica", "B", 16)
+        self.cell(0, 10, "Bureau Tradeline Report", align="C", new_x="LMARGIN", new_y="NEXT")
+        self.ln(5)
+
+
+def _build_bureau_pdf(report: BureauReport) -> FPDF:
+    """Build PDF document from BureauReport."""
+    pdf = BureauReportPDF()
+    pdf.add_page()
+
+    # -- Page 1: Executive Summary --
+
+    # Meta information
+    pdf.section_title("Report Information")
+    pdf.key_value("Customer ID", mask_customer_id(report.meta.customer_id))
+    pdf.key_value("Generated", report.meta.generated_at[:10] if report.meta.generated_at else "N/A")
+    pdf.key_value("Currency", report.meta.currency)
+    pdf.key_value("Total Tradelines", str(report.executive_inputs.total_tradelines))
+    pdf.ln(5)
+
+    # Key metrics grid
+    pdf.section_title("Portfolio Summary")
+    ei = report.executive_inputs
+    pdf.key_value("Live Tradelines", str(ei.live_tradelines))
+    pdf.key_value("Closed Tradelines", str(ei.closed_tradelines))
+    pdf.key_value("Total Exposure", f"{ei.total_exposure:,.0f} {report.meta.currency}")
+    pdf.key_value("Total Outstanding", f"{ei.total_outstanding:,.0f} {report.meta.currency}")
+    pdf.key_value("Unsecured Exposure", f"{ei.unsecured_exposure:,.0f} {report.meta.currency}")
+    pdf.key_value("Delinquency", "Yes" if ei.has_delinquency else "No")
+    pdf.key_value("Max DPD", str(ei.max_dpd) if ei.max_dpd is not None else "N/A")
+    pdf.ln(5)
+
+    # Narrative (LLM-generated executive summary)
+    if report.narrative:
+        pdf.section_title("Executive Summary")
+        pdf.section_text(report.narrative)
+        pdf.ln(3)
+
+    # -- Page 2: Product-wise Table --
+    pdf.add_page()
+    pdf.section_title("Product-wise Breakdown")
+
+    headers = [
+        "Type", "Sec", "Count", "Live", "Closed",
+        "Sanctioned", "Outstanding", "Max DPD", "Util%",
+        "On-Us", "Off-Us"
+    ]
+    widths = [28, 12, 16, 14, 16, 28, 28, 18, 14, 16, 16]
+
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_fill_color(220, 220, 220)
+    for header, width in zip(headers, widths):
+        pdf.cell(width, 7, header, border=1, fill=True, align="C")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 7)
+    for loan_type, vec in report.feature_vectors.items():
+        secured = "Y" if loan_type in SECURED_LOAN_TYPES else "N"
+        util = f"{vec.utilization_ratio:.0f}" if vec.utilization_ratio is not None else "-"
+        max_dpd = str(vec.max_dpd) if vec.max_dpd is not None else "-"
+
+        values = [
+            loan_type.value[:12],
+            secured,
+            str(vec.loan_count),
+            str(vec.live_count),
+            str(vec.closed_count),
+            f"{vec.total_sanctioned_amount:,.0f}",
+            f"{vec.total_outstanding_amount:,.0f}",
+            max_dpd,
+            util,
+            str(vec.on_us_count),
+            str(vec.off_us_count),
+        ]
+
+        for val, width in zip(values, widths):
+            display_val = str(val)[:12]
+            pdf.cell(width, 6, display_val, border=1, align="C")
+        pdf.ln()
+
+    # Totals row
+    pdf.set_font("Helvetica", "B", 7)
+    ei = report.executive_inputs
+    totals = [
+        "TOTAL", "",
+        str(ei.total_tradelines),
+        str(ei.live_tradelines),
+        str(ei.closed_tradelines),
+        f"{ei.total_exposure:,.0f}",
+        f"{ei.total_outstanding:,.0f}",
+        str(ei.max_dpd) if ei.max_dpd is not None else "-",
+        "", "", ""
+    ]
+    for val, width in zip(totals, widths):
+        pdf.cell(width, 6, val, border=1, align="C")
+    pdf.ln()
+
+    return pdf
+
+
+def render_bureau_report_pdf(
+    report: BureauReport,
+    output_path: Optional[str] = None,
+) -> str:
+    """Render a BureauReport to PDF (and HTML).
+
+    Args:
+        report: Fully populated BureauReport.
+        output_path: Desired output file path (.pdf). Defaults to
+                      reports/bureau_{customer_id}_report.pdf.
+
+    Returns:
+        Path where PDF was saved.
+    """
+    if output_path is None:
+        output_path = f"reports/bureau_{report.meta.customer_id}_report.pdf"
+
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build and save PDF
+    pdf = _build_bureau_pdf(report)
+    pdf.output(str(output_file))
+
+    # Also save HTML version for browser viewing
+    html_path = str(output_file).replace(".pdf", ".html")
+    html_content = render_bureau_report_html(report)
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    return str(output_file)
+
+
+def render_bureau_report_html(report: BureauReport) -> str:
+    """Render a BureauReport to HTML string using Jinja2 template.
+
+    Args:
+        report: BureauReport to render.
+
+    Returns:
+        HTML string.
+    """
+    template_dir = Path(__file__).parent.parent / "templates"
+    template_dir.mkdir(parents=True, exist_ok=True)
+
+    env = Environment(
+        loader=FileSystemLoader(str(template_dir)),
+        autoescape=True,
+    )
+    env.filters["mask_id"] = mask_customer_id
+
+    # Prepare template data — convert feature vectors to dicts for Jinja
+    vectors_data = []
+    for loan_type, vec in report.feature_vectors.items():
+        vec_dict = asdict(vec)
+        vec_dict["loan_type_display"] = loan_type.value
+        vec_dict["secured"] = loan_type in SECURED_LOAN_TYPES
+        vectors_data.append(vec_dict)
+
+    template = env.get_template("bureau_report.html")
+    return template.render(report=report, vectors_data=vectors_data)
