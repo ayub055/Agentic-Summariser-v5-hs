@@ -27,6 +27,26 @@ class BureauReportPDF(ReportPDF):
         self.ln(5)
 
 
+def _render_group_header(pdf, title: str):
+    """Render a sub-group header in the PDF."""
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 7, title, new_x="LMARGIN", new_y="NEXT")
+
+
+def _render_feature_pair(pdf, label: str, value):
+    """Render a label-value pair, showing 'N/A' for None."""
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(100, 6, f"{label}:")
+    pdf.set_font("Helvetica", "", 9)
+    if value is None:
+        display = "N/A"
+    elif isinstance(value, float):
+        display = f"{value:.2f}"
+    else:
+        display = str(value)
+    pdf.cell(0, 6, display, new_x="LMARGIN", new_y="NEXT")
+
+
 def _build_bureau_pdf(report: BureauReport) -> FPDF:
     """Build PDF document from BureauReport."""
     pdf = BureauReportPDF()
@@ -119,6 +139,60 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         pdf.cell(width, 6, val, border=1, align="C")
     pdf.ln()
 
+    # -- Page 3: Behavioral & Risk Features --
+    if report.tradeline_features is not None:
+        pdf.add_page()
+        pdf.section_title("Behavioral & Risk Features")
+        tf = report.tradeline_features
+
+        # Loan Activity
+        _render_group_header(pdf, "Loan Activity")
+        _render_feature_pair(pdf, "Months Since Last PL Trade Opened", tf.months_since_last_trade_pl)
+        _render_feature_pair(pdf, "Months Since Last Unsecured Trade Opened", tf.months_since_last_trade_uns)
+        _render_feature_pair(pdf, "New PL Trades in Last 6 Months", tf.new_trades_6m_pl)
+        _render_feature_pair(pdf, "Total Trades (All Types)", tf.total_trades)
+        pdf.ln(3)
+
+        # DPD & Delinquency
+        _render_group_header(pdf, "DPD & Delinquency")
+        _render_feature_pair(pdf, "Max DPD Last 6M (CC)", tf.max_dpd_6m_cc)
+        _render_feature_pair(pdf, "Max DPD Last 6M (PL)", tf.max_dpd_6m_pl)
+        _render_feature_pair(pdf, "Max DPD Last 9M (CC)", tf.max_dpd_9m_cc)
+        _render_feature_pair(pdf, "Months Since Last 0+ DPD (Unsecured)", tf.months_since_last_0p_uns)
+        _render_feature_pair(pdf, "Months Since Last 0+ DPD (PL)", tf.months_since_last_0p_pl)
+        pdf.ln(3)
+
+        # Payment Behavior
+        _render_group_header(pdf, "Payment Behavior")
+        _render_feature_pair(pdf, "% Trades with 0+ DPD in 24M (All)", tf.pct_0plus_24m_all)
+        _render_feature_pair(pdf, "% Trades with 0+ DPD in 24M (PL)", tf.pct_0plus_24m_pl)
+        _render_feature_pair(pdf, "% Missed Payments Last 18M", tf.pct_missed_payments_18m)
+        _render_feature_pair(pdf, "% Trades with 0+ DPD in 12M (All)", tf.pct_trades_0plus_12m)
+        _render_feature_pair(pdf, "Ratio Good Closed Loans (PL)", tf.ratio_good_closed_pl)
+        pdf.ln(3)
+
+        # Utilization
+        _render_group_header(pdf, "Utilization")
+        _render_feature_pair(pdf, "CC Balance Utilization %", tf.cc_balance_utilization_pct)
+        _render_feature_pair(pdf, "PL Balance Remaining %", tf.pl_balance_remaining_pct)
+        pdf.ln(3)
+
+        # Enquiry Behavior
+        _render_group_header(pdf, "Enquiry Behavior")
+        _render_feature_pair(pdf, "Unsecured Enquiries Last 12M", tf.unsecured_enquiries_12m)
+        _render_feature_pair(pdf, "Trade-to-Enquiry Ratio (Unsec 24M)", tf.trade_to_enquiry_ratio_uns_24m)
+        pdf.ln(3)
+
+        # Loan Acquisition Velocity
+        _render_group_header(pdf, "Loan Acquisition Velocity")
+        _render_feature_pair(pdf, "Avg Interpurchase Time 12M (PL/BL)", tf.interpurchase_time_12m_plbl)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 6M (PL/BL)", tf.interpurchase_time_6m_plbl)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 24M (All)", tf.interpurchase_time_24m_all)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 9M (HL/LAP)", tf.interpurchase_time_9m_hl_lap)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 24M (HL/LAP)", tf.interpurchase_time_24m_hl_lap)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 24M (TWL)", tf.interpurchase_time_24m_twl)
+        _render_feature_pair(pdf, "Avg Interpurchase Time 12M (Consumer Loan)", tf.interpurchase_time_12m_cl)
+
     return pdf
 
 
@@ -181,5 +255,14 @@ def render_bureau_report_html(report: BureauReport) -> str:
         vec_dict["secured"] = vec.secured
         vectors_data.append(vec_dict)
 
+    # Prepare tradeline features for template
+    tl_features_data = None
+    if report.tradeline_features is not None:
+        tl_features_data = asdict(report.tradeline_features)
+
     template = env.get_template("bureau_report.html")
-    return template.render(report=report, vectors_data=vectors_data)
+    return template.render(
+        report=report,
+        vectors_data=vectors_data,
+        tl_features=tl_features_data,
+    )

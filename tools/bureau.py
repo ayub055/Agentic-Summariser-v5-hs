@@ -34,7 +34,10 @@ def generate_bureau_report_pdf(customer_id: int) -> Tuple[BureauReport, str]:
     # 2. LLM narrative (fail-soft)
     try:
         from pipeline.report_summary_chain import generate_bureau_review
-        report.narrative = generate_bureau_review(report.executive_inputs)
+        report.narrative = generate_bureau_review(
+            report.executive_inputs,
+            tradeline_features=report.tradeline_features,
+        )
     except Exception as e:
         logger.warning(f"Bureau narrative generation failed: {e}")
 

@@ -9,6 +9,7 @@ from typing import Dict, Optional
 
 from schemas.loan_type import LoanType
 from features.bureau_features import BureauLoanFeatureVector
+from features.tradeline_features import TradelineFeatures
 from pipeline.bureau_feature_aggregator import BureauExecutiveSummaryInputs
 from schemas.customer_report import ReportMeta
 
@@ -20,4 +21,5 @@ class BureauReport:
     executive_inputs: BureauExecutiveSummaryInputs = field(default_factory=lambda: BureauExecutiveSummaryInputs(
         total_tradelines=0, live_tradelines=0, closed_tradelines=0
     ))
+    tradeline_features: Optional[TradelineFeatures] = None
     narrative: Optional[str] = None

@@ -1,361 +1,456 @@
-# Bureau Report & Executive Summary – Implementation Instructions
+# Project Architecture — Kotak Agentic Reader
 
-This document is written for **Cursor** to implement bureau tradeline–based reporting **within the existing architecture**.
-
-The goal is to:
-
-* Reuse the current agentic pipeline
-* Add a new **bureau report vertical**
-* Introduce a **feature-extraction layer** for bureau tradelines
-* Generate a deterministic **executive summary** (later narrated by LLM)
+This document is the **single source of truth** for the project's architecture.
+It covers both the shared agentic pipeline and the bureau report vertical.
+Use this as context before making any changes.
 
 ---
 
-## 1. Guiding Principles (DO NOT VIOLATE)
+## 1. Project Overview
 
-1. **This work MUST reuse the existing pipeline end-to-end**
-2. **No new agent, planner, executor, or UI is to be created**
-3. **Bureau reporting is a parallel report vertical, not a new system**
-4. **No LLM touches raw bureau tradelines**
-5. **All bureau features are computed deterministically**
-6. **LLM is used only for narration / phrasing**
-7. **Reuse intent → planner → executor → PDF → UI exactly as-is**
-8. **Features ≠ report sections** (features are inputs)
+A LangChain-based agentic system that answers natural-language financial queries.
+Two verticals share one pipeline:
 
-If any logic ends up inside the LLM prompt → architecture is wrong.
+| Vertical | Data Source | Customer ID Column | Report Type |
+|---|---|---|---|
+| **Banking** | `data/ayub_txns.csv` | `cust_id` | Customer Report PDF |
+| **Bureau** | `dpd_data.csv` (tab-separated) | `crn` | Bureau Tradeline Report PDF |
 
----
-
-## 2. High-Level Architecture Extension
-
-⚠️ IMPORTANT: This is **NOT a new pipeline**.
-
-The existing pipeline remains unchanged. We are **adding a parallel report build path** that plugs into the same flow.
-
-Existing (unchanged):
-
-```
-Intent
- → Tool
-   → Builder (deterministic)
-     → Schema
-       → LLM Summary
-         → PDF
-```
-
-Extended (parallel build path only):
-
-```
-Intent (BUREAU_REPORT)
- → Tool (generate_bureau_report)
-   → Bureau Report Builder   ← parallel to customer_report_builder
-       → Feature Extraction Layer
-       → Feature Aggregation Layer
-       → Executive Summary Inputs
-   → LLM Narration (existing summary chain)
-   → PDF Renderer (existing engine, new template)
-```
-
-Nothing above the **Builder layer** changes.
+**Key rule:** Determinism > intelligence. All numbers are computed deterministically. LLM is used **only** for narration of pre-computed results.
 
 ---
 
-## 3. New Intent Addition
+## 2. Directory Structure
 
-### File: `schemas/intent.py`
-
-Add a new intent:
-
-```python
-class IntentType(str, Enum):
-    ...
-    BUREAU_REPORT = "bureau_report"
 ```
-
----
-
-## 4. Intent Mapping
-
-### File: `config/intents.py`
-
-```python
-INTENT_TOOL_MAP[IntentType.BUREAU_REPORT] = ["generate_bureau_report"]
-
-REQUIRED_FIELDS[IntentType.BUREAU_REPORT] = ["customer_id"]
-```
-
----
-
-## 5. Loan Taxonomy (Canonical)
-
-### File: `schemas/loan_type.py`
-
-Create a **single source of truth** for loan types:
-Refer to dpd_data.csv for names of loan types and create accorfingly
-
-```python
-class LoanType(str, Enum):
-    PL = "personal_loan"
-    CC = "credit_card"
-    HL = "home_loan"
-    AL = "auto_loan"
-    BL = "business_loan"
-    LAP = "lap_las_lad"
-    GL = "gold_loan"
-    TWL = "two_wheeler_loan"
-    CD = "consumer_durable"
-    OTHER = "other"
-```
-
-All bureau logic MUST reference this enum.
-
----
-
-## 6. Bureau Feature Definition Layer (CORE)
-
-### Purpose
-
-This layer implements the **feature matrix** you provided.
-
-Each feature is a **primitive data point** used to compute the executive summary.
-
-### File: `features/bureau_features.py`
-
-Define a **FeatureVector** (internal, not UI-facing):
-
-```python
-@dataclass
-class BureauLoanFeatureVector:
-    loan_type: LoanType
-    secured: bool
-
-    loan_count: int
-    total_sanctioned_amount: float
-    total_outstanding_amount: float
-
-    avg_vintage_months: float
-    months_since_last_payment: Optional[int]
-
-    live_count: int
-    closed_count: int
-
-    delinquency_flag: bool
-    max_dpd: Optional[int]
-    overdue_amount: float
-
-    utilization_ratio: Optional[float]  # CC only
-
-    forced_event_flags: List[str]
-    on_us_count: int
-    off_us_count: int
-```
-
-Applicability rules (e.g. utilization only for CC) are enforced during computation.
-
----
-
-## 7. Feature Extraction Logic
-
-### File: `pipeline/bureau_feature_extractor.py`
-
-Responsibilities:
-
-1. Load raw bureau tradelines
-2. Normalize loan types → `LoanType`
-3. Group tradelines by loan type
-4. Compute **one FeatureVector per loan type**
-
-This layer MUST:
-
-* Contain all numeric logic
-* Handle missing / partial data safely
-* Never format text
-
----
-
-## 8. Feature Aggregation Layer
-
-### File: `pipeline/bureau_feature_aggregator.py`
-
-Compute **executive summary inputs** from feature vectors.
-
-Examples:
-
-* Total tradelines
-* Live vs closed counts
-* Product-wise exposure
-* Total unsecured exposure
-* Max delinquency across portfolio
-* Weighted utilization
-
-Output:
-
-```python
-@dataclass
-class BureauExecutiveSummaryInputs:
-    total_tradelines: int
-    live_tradelines: int
-    closed_tradelines: int
-
-    product_breakdown: Dict[LoanType, BureauLoanFeatureVector]
-
-    total_exposure: float
-    total_outstanding: float
-    unsecured_exposure: float
-
-    has_delinquency: bool
-    max_dpd: Optional[int]
-```
-
-This object is what the LLM will see.
-
----
-
-## 9. Bureau Report Schema
-
-### File: `schemas/bureau_report.py`
-
-```python
-@dataclass
-class BureauReport:
-    meta: ReportMeta
-    feature_vectors: Dict[LoanType, BureauLoanFeatureVector]
-    executive_inputs: BureauExecutiveSummaryInputs
-    narrative: Optional[str] = None
-```
-
-Feature vectors are retained for auditability.
-
----
-
-## 10. Bureau Report Builder
-
-### File: `pipeline/bureau_report_builder.py`
-
-Responsibilities:
-
-1. Call feature extractor
-2. Call feature aggregator
-3. Assemble `BureauReport`
-
-NO LLM CALLS HERE.
-
----
-
-## 11. Tool Orchestration
-
-### File: `pipeline/executor.py`
-
-Register tool:
-
-```python
-"generate_bureau_report": generate_bureau_report_pdf
-```
-
-### File: `tools/bureau.py`
-
-```python
-def generate_bureau_report_pdf(customer_id: int):
-    report = build_bureau_report(customer_id)
-    report.narrative = generate_bureau_review(report.executive_inputs)
-    pdf_path = render_bureau_report_pdf(report)
-    return report, pdf_path
+langchain_agentic_v6_hs/
+│
+├── app.py                          # Streamlit UI (shared for both verticals)
+├── main.py                         # CLI entry point
+├── dpd_data.csv                    # Bureau tradeline data (tab-separated)
+├── tl_features.csv                 # Pre-computed tradeline features (tab-separated)
+├── instructions.md                 # THIS FILE
+│
+├── config/
+│   ├── intents.py                  # INTENT_TOOL_MAP, REQUIRED_FIELDS
+│   ├── categories.yaml             # Category taxonomy for banking
+│   ├── category_loader.py          # YAML loader for categories
+│   ├── section_tools.py            # Report section → tool mapping
+│   └── settings.py                 # Model names, thresholds
+│
+├── schemas/
+│   ├── intent.py                   # IntentType enum + ParsedIntent model
+│   ├── loan_type.py                # LoanType enum, normalization map, SECURED_LOAN_TYPES
+│   ├── bureau_report.py            # BureauReport dataclass
+│   ├── customer_report.py          # CustomerReport model + ReportMeta
+│   ├── response.py                 # PipelineResponse, ToolResult, AuditLog
+│   ├── category_presence.py        # Category presence lookup schema
+│   ├── transaction_insights.py     # Transaction insight patterns
+│   └── transaction_summary.py      # Transaction summary schema
+│
+├── features/
+│   ├── bureau_features.py          # BureauLoanFeatureVector dataclass
+│   └── tradeline_features.py       # TradelineFeatures dataclass (pre-computed)
+│
+├── data/
+│   ├── loader.py                   # Banking CSV loader (get_transactions_df)
+│   └── ayub_txns.csv               # Banking transaction data
+│
+├── pipeline/
+│   ├── orchestrator.py             # TransactionPipeline (main entry, shared)
+│   ├── intent_parser.py            # LLM + fallback intent parsing
+│   ├── planner.py                  # QueryPlanner (validation + plan creation)
+│   ├── executor.py                 # ToolExecutor (tool dispatch)
+│   ├── explainer.py                # LLM-powered response narration
+│   ├── audit.py                    # JSONL audit logging
+│   │
+│   ├── # --- Banking Report Path ---
+│   ├── customer_report_builder.py  # Deterministic report assembly
+│   ├── report_orchestrator.py      # Wires builder → LLM → PDF for banking
+│   ├── report_planner.py           # Section planner for customer reports
+│   ├── report_summary_chain.py     # LLM narration chains (banking + bureau)
+│   ├── pdf_renderer.py             # ReportPDF class + banking PDF/HTML render
+│   │
+│   ├── # --- Bureau Report Path ---
+│   ├── bureau_feature_extractor.py # Raw CSV → per-loan-type feature vectors
+│   ├── bureau_feature_aggregator.py# Feature vectors → executive summary inputs
+│   ├── bureau_report_builder.py    # Wires extraction → aggregation → BureauReport
+│   ├── tradeline_feature_extractor.py # tl_features.csv → TradelineFeatures
+│   ├── bureau_pdf_renderer.py      # BureauReportPDF + PDF/HTML render
+│   │
+│   ├── # --- Shared Utilities ---
+│   ├── transaction_flow.py         # Transaction insight extraction
+│   ├── insight_store.py            # Insight caching
+│   └── result_merger.py            # Multi-tool result merging
+│
+├── tools/
+│   ├── analytics.py                # Banking analytics tools (debit_total, etc.)
+│   ├── bureau.py                   # generate_bureau_report_pdf (bureau tool entry)
+│   ├── category_resolver.py        # Category presence lookup tool
+│   ├── income.py                   # Income analysis tools
+│   ├── lookup.py                   # Lookup utilities
+│   ├── schemas.py                  # Tool-specific schemas
+│   └── transaction_fetcher.py      # Raw transaction fetching
+│
+├── utils/
+│   ├── helpers.py                  # mask_customer_id, formatting
+│   ├── narration_utils.py          # Narration formatting helpers
+│   └── transaction_filter.py       # Transaction filtering logic
+│
+├── templates/
+│   ├── customer_report.html        # Jinja2 template for banking PDF/HTML
+│   └── bureau_report.html          # Jinja2 template for bureau PDF/HTML
+│
+├── reports/                        # Generated PDF + HTML outputs
+└── logs/                           # Audit JSONL logs
 ```
 
 ---
 
-## 12. LLM Summary Chain
+## 3. Shared Pipeline (Both Verticals)
 
-### File: `pipeline/report_summary_chain.py`
-
-Add a new function:
-
-```python
-def generate_bureau_review(executive_inputs, style="hinglish"):
-    # LLM sees ONLY executive_inputs
-```
-
-Rules:
-
-* No numbers invented
-* No arithmetic
-* Pure narration
-
----
-
-## 13. PDF Rendering
-
-### File: `templates/bureau_report.html`
-
-Two pages:
-
-**Page 1 – Executive Summary**
-
-* Total tradelines
-* Live vs closed
-* Key exposures
-* Delinquency flags
-
-**Page 2 – Product-wise Table**
-
-* One row per loan type
-* Columns from feature matrix
-
----
-
-## 14. UI Integration (No New UI)
-
-The **existing ChatGPT-like UI is reused without modification**.
-
-There is:
-
-* No new frontend
-* No new endpoints
-* No new routing layer
-
-The UI simply sends user text into the same pipeline.
-
-Example:
+Every user query flows through the same 5-phase pipeline. **No new agents, planners, executors, or UI components are created for new verticals.**
 
 ```
-User: Generate bureau report for <customer_id>
+User Query (text)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: INTENT PARSER  (pipeline/intent_parser.py)           │
+│  ├─ LLM-based JSON extraction (primary)                       │
+│  └─ Regex fallback parser (secondary)                         │
+│  Output: ParsedIntent { intent, customer_id, category, ... }  │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 2: PLANNER  (pipeline/planner.py)                       │
+│  ├─ Validates customer_id against correct data source:        │
+│  │   - Banking intents → valid_customers (from ayub_txns.csv) │
+│  │   - BUREAU_REPORT   → valid_bureau_customers (from dpd)    │
+│  ├─ Normalizes categories                                     │
+│  ├─ Validates date ranges                                     │
+│  └─ Looks up INTENT_TOOL_MAP → builds execution plan          │
+│  Output: [{ tool: "tool_name", args: {...} }, ...]            │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 3: EXECUTOR  (pipeline/executor.py)                     │
+│  ├─ Dispatches each plan step to registered tool function      │
+│  ├─ tool_map keys → Python callables                          │
+│  └─ Wraps results in ToolResult { success, result, error }    │
+│  Output: List[ToolResult]                                      │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 4: EXPLAINER  (pipeline/explainer.py)                   │
+│  ├─ Formats tool results into LLM prompt                      │
+│  ├─ Streams LLM narration back to UI                          │
+│  └─ For reports: narrative is generated inside the tool itself │
+│  Output: Streaming text response                               │
+└─────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 5: UI  (app.py — Streamlit)                             │
+│  ├─ Renders streaming text in chat bubble                     │
+│  ├─ If pdf_path in result → shows download button             │
+│  └─ Maintains chat history in st.session_state                │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The intent parser routes to `BUREAU_REPORT`, which triggers a **parallel report build** using the same executor and renderer.
+---
 
-Return to UI:
+## 4. Intent System
 
-* Executive narrative
-* PDF download button
+### 4a. IntentType Enum (`schemas/intent.py`)
+
+All supported intents. Adding a new capability = adding a new enum value here first.
+
+| Intent | Tool(s) | Required Fields |
+|---|---|---|
+| `TOTAL_SPENDING` | `debit_total` | `customer_id` |
+| `TOTAL_INCOME` | `get_total_income` | `customer_id` |
+| `SPENDING_BY_CATEGORY` | `get_spending_by_category` | `customer_id` |
+| `TOP_CATEGORIES` | `top_spending_categories` | `customer_id` |
+| `SPENDING_IN_PERIOD` | `spending_in_date_range` | `customer_id`, `start_date`, `end_date` |
+| `FINANCIAL_OVERVIEW` | `get_total_income`, `debit_total`, `top_spending_categories` | `customer_id` |
+| `COMPARE_CATEGORIES` | `get_spending_by_category` (per category) | `customer_id`, `categories` |
+| `CUSTOMER_REPORT` | `generate_customer_report` | `customer_id` |
+| `LENDER_PROFILE` | `generate_lender_profile` | `customer_id` |
+| `CREDIT_ANALYSIS` | `get_credit_statistics` | `customer_id` |
+| `DEBIT_ANALYSIS` | `get_debit_statistics`, `top_spending_categories`, `debit_total` | `customer_id` |
+| `ANOMALY_DETECTION` | `detect_anomalies` | `customer_id` |
+| `BALANCE_TREND` | `get_balance_trend` | `customer_id` |
+| `INCOME_STABILITY` | `get_income_stability` | `customer_id` |
+| `CASH_FLOW` | `get_cash_flow` | `customer_id` |
+| `CATEGORY_PRESENCE_LOOKUP` | `category_presence_lookup` | `customer_id`, `category` |
+| `BUREAU_REPORT` | `generate_bureau_report` | `customer_id` |
+
+### 4b. Intent Mapping (`config/intents.py`)
+
+Two dicts control routing:
+- `INTENT_TOOL_MAP`: IntentType → list of tool name strings
+- `REQUIRED_FIELDS`: IntentType → list of required field names
+
+### 4c. Intent Parser (`pipeline/intent_parser.py`)
+
+Two-stage parsing:
+1. **LLM parser** — sends query to Ollama with `PARSER_PROMPT`, extracts JSON
+2. **Fallback parser** — regex-based keyword matching (runs if LLM fails or confidence < threshold)
+
+Bureau keywords in fallback: `"bureau report"`, `"bureau"`, `"cibil report"`, `"cibil"`, `"tradeline report"`, `"credit bureau"` — checked **before** generic "report" keywords to avoid misclassification.
 
 ---
 
-## 15. Validation & Safety
+## 5. Bureau Report Vertical — Complete Architecture
 
-Add checks:
+### 5a. Data Flow
 
-* Sum of live + closed == total tradelines
-* Utilization only present for CC
-* No negative balances
+```
+User: "Generate bureau report for 100384958"
+    │
+    ▼
+Intent Parser → intent=BUREAU_REPORT, customer_id=100384958
+    │
+    ▼
+Planner → validates CRN against dpd_data.csv (NOT ayub_txns.csv)
+    │       → plan: [{ tool: "generate_bureau_report", args: { customer_id: 100384958 } }]
+    ▼
+Executor → calls _generate_bureau_report_with_pdf(customer_id=100384958)
+    │
+    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  tools/bureau.py :: generate_bureau_report_pdf(customer_id)                │
+│                                                                             │
+│  Step 1: BUILD (deterministic)                                              │
+│  └─ bureau_report_builder.build_bureau_report(customer_id)                 │
+│      ├─ bureau_feature_extractor.extract_bureau_features(customer_id)      │
+│      │   ├─ Load dpd_data.csv (tab-separated, cached)                     │
+│      │   ├─ Filter rows by crn == customer_id                              │
+│      │   ├─ Normalize each raw loan_type → LoanType enum                  │
+│      │   ├─ Group tradelines by canonical LoanType                         │
+│      │   └─ Compute BureauLoanFeatureVector per group                     │
+│      │       ├─ loan_count, live_count, closed_count                       │
+│      │       ├─ total_sanctioned, total_outstanding, overdue               │
+│      │       ├─ secured (per-tradeline check against SECURED_LOAN_TYPES)  │
+│      │       ├─ max_dpd, delinquency_flag                                 │
+│      │       ├─ utilization_ratio (CC only)                                │
+│      │       ├─ forced_event_flags (from dpd_string)                      │
+│      │       ├─ on_us_count / off_us_count (KOTAK sectors)                │
+│      │       └─ avg_vintage_months, months_since_last_payment             │
+│      │                                                                     │
+│      ├─ bureau_feature_aggregator.aggregate_bureau_features(vectors)       │
+│      │   └─ Returns BureauExecutiveSummaryInputs:                         │
+│      │       total_tradelines, live, closed, exposure, outstanding,        │
+│      │       unsecured_exposure (using vec.secured), delinquency, max_dpd │
+│      │                                                                     │
+│      ├─ Assemble BureauReport { meta, feature_vectors, executive_inputs } │
+│      └─ Validate (fail-soft: live+closed==total, CC-only util, no negs)   │
+│                                                                             │
+│  Step 2: NARRATE (fail-soft)                                                │
+│  └─ report_summary_chain.generate_bureau_review(executive_inputs)          │
+│      ├─ _build_bureau_data_summary(inputs) → plain text block             │
+│      ├─ BUREAU_REVIEW_PROMPT → LLM (Ollama LCEL chain)                    │
+│      └─ Returns narrative string (or None on failure)                      │
+│                                                                             │
+│  Step 3: RENDER (fail-soft)                                                 │
+│  └─ bureau_pdf_renderer.render_bureau_report_pdf(report)                   │
+│      ├─ _build_bureau_pdf(report) → FPDF                                  │
+│      │   ├─ Page 1: Meta + Portfolio Summary + Executive Narrative         │
+│      │   └─ Page 2: Product-wise Table (one row per LoanType)             │
+│      ├─ Save PDF to reports/bureau_{id}_report.pdf                        │
+│      └─ Save HTML to reports/bureau_{id}_report.html (Jinja2 template)    │
+│                                                                             │
+│  Returns: (BureauReport, pdf_path)                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+    │
+    ▼
+Executor wrapper → converts to dict { executive_inputs, feature_vectors, narrative, pdf_path }
+    │
+    ▼
+Explainer → streams LLM narration to UI
+    │
+    ▼
+UI → shows narrative + PDF download button
+```
 
-Failures → log + partial report (fail-soft).
+### 5b. Loan Type Taxonomy (`schemas/loan_type.py`)
+
+**LoanType enum** — 10 canonical types:
+`PL`, `CC`, `HL`, `AL`, `BL`, `LAP`, `GL`, `TWL`, `CD`, `OTHER`
+
+**LOAN_TYPE_NORMALIZATION_MAP** — maps 54+ raw loan type strings from `dpd_data.csv` to canonical enum.
+
+**SECURED_LOAN_TYPES** — `Set[str]` of raw loan type names where `sec_flag=1`. Checked at raw level because some canonical types (BL, CC) have both secured and unsecured variants.
+
+**`is_secured(raw_loan_type: str) -> bool`** — checks raw string against `SECURED_LOAN_TYPES`.
+
+**`normalize_loan_type(raw_loan_type: str) -> LoanType`** — maps raw string via `LOAN_TYPE_NORMALIZATION_MAP`, defaults to `OTHER`.
+
+**ON_US_SECTORS** — `{"KOTAK BANK", "KOTAK PRIME"}` for on-us/off-us classification.
+
+### 5c. Secured Classification Flow
+
+```
+Raw loan_type string (per tradeline)
+    │
+    ▼
+is_secured(raw_loan_type) → bool
+    │  (checks against SECURED_LOAN_TYPES set of raw strings)
+    ▼
+BureauLoanFeatureVector.secured = any(is_secured(tl) for tl in tradelines_in_group)
+    │  (True if ANY tradeline in the canonical group is secured)
+    ▼
+Used downstream by:
+  ├─ bureau_feature_aggregator.py → vec.secured (for unsecured_exposure calc)
+  └─ bureau_pdf_renderer.py      → vec.secured (for PDF/HTML display)
+```
+
+### 5d. Key Files — Bureau Vertical
+
+| File | Role | Key Functions |
+|---|---|---|
+| `schemas/loan_type.py` | Taxonomy | `LoanType`, `normalize_loan_type()`, `is_secured()` |
+| `features/bureau_features.py` | Feature definition | `BureauLoanFeatureVector` dataclass |
+| `features/tradeline_features.py` | Pre-computed features | `TradelineFeatures` dataclass (25 customer-level features) |
+| `pipeline/bureau_feature_extractor.py` | Raw data → features | `extract_bureau_features(customer_id)` |
+| `pipeline/tradeline_feature_extractor.py` | CSV → pre-computed features | `extract_tradeline_features(customer_id)` |
+| `pipeline/bureau_feature_aggregator.py` | Features → summary | `aggregate_bureau_features(vectors)`, `BureauExecutiveSummaryInputs` |
+| `pipeline/bureau_report_builder.py` | Assembly + validation | `build_bureau_report(customer_id)` |
+| `schemas/bureau_report.py` | Report schema | `BureauReport` dataclass (includes `tradeline_features`) |
+| `tools/bureau.py` | Tool entry point | `generate_bureau_report_pdf(customer_id)` |
+| `pipeline/report_summary_chain.py` | LLM narration | `generate_bureau_review(executive_inputs, tradeline_features)` |
+| `pipeline/bureau_pdf_renderer.py` | PDF/HTML output | `render_bureau_report_pdf(report)` |
+| `templates/bureau_report.html` | HTML template | Jinja2 with `mask_id` filter |
 
 ---
 
-## 16. Future Extensions (DO NOT BUILD NOW)
+## 6. Banking Report Vertical — Architecture
 
-* Combined bank + bureau report
-* Risk score derivation
-* Policy-based decisioning
+```
+User: "Generate report for customer 9449274898"
+    │
+    ▼
+Intent Parser → intent=CUSTOMER_REPORT, customer_id=9449274898
+    │
+    ▼
+Planner → validates customer_id against ayub_txns.csv
+    │       → plan: [{ tool: "generate_customer_report", args: { customer_id: ... } }]
+    ▼
+Executor → calls _generate_customer_report_with_pdf(customer_id)
+    │
+    ▼
+report_orchestrator.generate_customer_report_pdf(customer_id)
+    ├─ customer_report_builder → assembles CustomerReport (Pydantic model)
+    ├─ report_summary_chain → LLM narration per section
+    ├─ pdf_renderer → ReportPDF + Jinja2 HTML
+    └─ Returns (CustomerReport, pdf_path)
+```
+
+### Key Files — Banking Vertical
+
+| File | Role |
+|---|---|
+| `data/loader.py` | `get_transactions_df()` — loads `ayub_txns.csv` |
+| `tools/analytics.py` | All banking analytics tools |
+| `pipeline/customer_report_builder.py` | Deterministic report assembly |
+| `pipeline/report_orchestrator.py` | Wires builder → LLM → PDF |
+| `pipeline/pdf_renderer.py` | `ReportPDF` class (also imported by bureau renderer) |
+| `schemas/customer_report.py` | `CustomerReport` model + `ReportMeta` |
+| `templates/customer_report.html` | Jinja2 HTML template |
 
 ---
 
-## 17. Final Note to Cursor
+## 7. Guiding Principles
 
-This is a **financial risk system**.
+1. **Reuse the existing pipeline** — no new agents, planners, executors, or UI
+2. **Bureau is a parallel vertical**, not a new system
+3. **No LLM touches raw data** — LLM sees only pre-computed summary inputs
+4. **All features are deterministic** — if logic could be in LLM, move it to features
+5. **Features ≠ report sections** — features are computed inputs to the report
+6. **Fail-soft** — LLM narration and PDF rendering are wrapped in try/except; a failed narration still returns the data
+7. **Secured classification is per raw loan type**, not per canonical type (because BL and CC have both secured and unsecured variants)
 
-Determinism > intelligence.
+---
 
-If logic feels like it belongs in the LLM, move it DOWN into features.
+## 8. How to Add a New Tool or Intent
 
-End of instructions.
+### Step-by-step:
+
+1. **`schemas/intent.py`** — Add `NEW_INTENT = "new_intent"` to `IntentType` enum
+2. **`config/intents.py`** — Add to `INTENT_TOOL_MAP` and `REQUIRED_FIELDS`
+3. **`pipeline/intent_parser.py`** — Add to `VALID_INTENTS`, `PARSER_PROMPT` examples, and `_fallback_parse` keywords
+4. **`tools/your_tool.py`** — Implement the tool function
+5. **`pipeline/executor.py`** — Register in `tool_map`
+6. **`pipeline/planner.py`** — Add tool name to `_get_tool_args` (for arg extraction)
+7. **`app.py`** — If the tool produces a PDF, add handling in the report generation block
+
+### For report-type tools specifically:
+
+- Builder goes in `pipeline/` (deterministic, no LLM)
+- LLM narration goes in `pipeline/report_summary_chain.py`
+- PDF renderer goes in `pipeline/` (imports `ReportPDF` from `pdf_renderer.py`)
+- HTML template goes in `templates/`
+- Schema goes in `schemas/`
+- Planner must validate customer ID against the **correct data source**
+
+---
+
+## 9. Data Sources
+
+### Banking: `data/ayub_txns.csv`
+- Standard CSV
+- Key columns: `cust_id`, `category_of_txn`, `amount`, `txn_date`, `balance`
+- Loaded by `data/loader.py` → `get_transactions_df()` (cached)
+
+### Bureau: `dpd_data.csv` (project root)
+- **Tab-separated** CSV
+- Key columns: `crn` (customer ID), `loan_type`, `loan_status`, `sanction_amount`, `out_standing_balance`, `over_due_amount`, `creditlimit`, `last_payment_date`, `tl_vin_1` (vintage), `sector`, `dpd_string`, `dpdf1`–`dpdf36` (36 monthly DPD flags)
+- Loaded by `pipeline/bureau_feature_extractor.py` → `_load_bureau_data()` (cached)
+
+### Bureau Pre-computed Features: `tl_features.csv` (project root)
+- **Tab-separated** CSV
+- Key column: `crn` (customer ID, same as `dpd_data.csv`)
+- 25 pre-computed customer-level features grouped into 6 categories:
+  - **Loan Activity** (4): recency of trades, new PL trades, total trade count
+  - **DPD & Delinquency** (5): max DPD by product/window, months since last 0+ DPD
+  - **Payment Behavior** (5): % DPD trades, % missed payments, good closure ratio
+  - **Utilization** (2): CC balance utilization, PL balance remaining
+  - **Enquiry Behavior** (2): unsecured enquiries, trade-to-enquiry ratio
+  - **Loan Acquisition Velocity** (7): interpurchase times across product/window combos
+- NULL values mean data not available (not zero)
+- Loaded by `pipeline/tradeline_feature_extractor.py` → `extract_tradeline_features()` (cached)
+
+---
+
+## 10. LLM Configuration
+
+- **Model**: Ollama (local) — model names in `config/settings.py`
+- **Chains**: LangChain LCEL (`ChatOllama | ChatPromptTemplate | StrOutputParser`)
+- **Intent parsing**: LLM extracts JSON from `PARSER_PROMPT`
+- **Narration**: Separate prompts for banking sections and bureau executive summary
+- **Style**: Hinglish narration for bureau reports
+
+---
+
+## 11. Future Extensions (NOT BUILT YET)
+
+- Combined bank + bureau report
+- Risk score derivation from bureau features
+- Policy-based decisioning
+- Additional bureau tools (chat queries about specific loan types, DPD trends)
+
+---
+
+## 12. Critical Reminders
+
+- `SECURED_LOAN_TYPES` is `Set[str]` (raw names), NOT `Set[LoanType]`
+- Bureau customer IDs are validated against `dpd_data.csv`, NOT `ayub_txns.csv`
+- `BureauReport` uses `dataclass` (not Pydantic `BaseModel`)
+- `CustomerReport` uses Pydantic `BaseModel`
+- `ReportMeta` from `schemas/customer_report.py` is shared by both report types
+- Bureau PDF renderer imports `ReportPDF` from `pipeline/pdf_renderer.py` — do not duplicate
+- `dpd_data.csv` is tab-separated (`delimiter="\t"`)

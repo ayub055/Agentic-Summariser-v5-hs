@@ -373,26 +373,265 @@ def _get_transaction_sample(customer_id: int, limit: int = 20) -> str:
 # Bureau Report — LLM Narration
 # =============================================================================
 
-BUREAU_REVIEW_PROMPT = """You are a credit analyst writing a brief executive summary of a customer's bureau tradeline portfolio.
+BUREAU_REVIEW_PROMPT = """You are a senior credit analyst writing an executive summary for a loan underwriting committee.
 
 IMPORTANT RULES:
-- Only reference numbers provided below — do NOT invent or compute any figures
-- No arithmetic — just narrate the pre-computed values
-- Keep the tone professional and concise (4-6 lines)
-- Highlight key risk signals: delinquency, high unsecured exposure, DPD
-- Note positive signals: diversified portfolio, mostly closed accounts, low outstanding
+- Only reference numbers and risk annotations provided below — do NOT invent figures
+- No arithmetic — just narrate the pre-computed values and their tagged interpretations
+- Features tagged [HIGH RISK], [MODERATE RISK], or [CONCERN] are red flags — highlight them
+- Features tagged [POSITIVE], [CLEAN], or [HEALTHY] are green signals — acknowledge them
+- Do NOT repeat raw numbers without context — use the interpretation provided
+
+STRUCTURE YOUR RESPONSE IN TWO PARAGRAPHS:
+1. PORTFOLIO OVERVIEW (3-4 lines): Tradeline composition, exposure, outstanding, delinquency status
+2. BEHAVIORAL INSIGHTS (4-6 lines): Credit behavior patterns — enquiry pressure, repayment discipline, utilization, loan acquisition velocity. Mention specific risk signals and positive signals by name.
 
 Bureau Portfolio Summary:
 {data_summary}
 
-Write a concise bureau portfolio review:"""
+Write the two-paragraph bureau portfolio review:"""
 
 
-def _build_bureau_data_summary(executive_inputs) -> str:
+def _annotate_value(value, thresholds):
+    """Annotate a value with risk tag based on thresholds.
+
+    Args:
+        value: The numeric value (or None).
+        thresholds: List of (comparator, threshold, tag) tuples, checked in order.
+                    comparator is one of '>', '<', '>=', '<=', '=='.
+
+    Returns:
+        Tag string like '[HIGH RISK]' or '[POSITIVE]', or '' if no threshold matched.
+    """
+    if value is None:
+        return ""
+    for comparator, threshold, tag in thresholds:
+        if comparator == ">" and value > threshold:
+            return tag
+        elif comparator == ">=" and value >= threshold:
+            return tag
+        elif comparator == "<" and value < threshold:
+            return tag
+        elif comparator == "<=" and value <= threshold:
+            return tag
+        elif comparator == "==" and value == threshold:
+            return tag
+    return ""
+
+
+def _format_tradeline_features_for_prompt(tf) -> str:
+    """Format TradelineFeatures with risk annotations for the LLM prompt.
+
+    Each feature is annotated with a risk interpretation tag based on
+    deterministic thresholds. Interaction signals are appended at the end.
+    """
+    tf_dict = asdict(tf) if not isinstance(tf, dict) else tf
+
+    def _val(key):
+        return tf_dict.get(key)
+
+    def _fmt(value):
+        if value is None:
+            return "N/A"
+        return f"{value:.2f}" if isinstance(value, float) else str(value)
+
+    lines = []
+
+    # --- Loan Activity ---
+    lines.append("  LOAN ACTIVITY:")
+    v = _val("new_trades_6m_pl")
+    if v is not None:
+        tag = _annotate_value(v, [(">=", 3, " [HIGH RISK — rapid PL acquisition]"),
+                                   (">=", 2, " [MODERATE RISK — multiple recent PLs]")])
+        lines.append(f"    New PL Trades in Last 6M: {v}{tag}")
+    v = _val("months_since_last_trade_pl")
+    if v is not None:
+        tag = _annotate_value(v, [("<", 2, " [CONCERN — very recent PL activity]")])
+        lines.append(f"    Months Since Last PL Trade: {_fmt(v)}{tag}")
+    v = _val("months_since_last_trade_uns")
+    if v is not None:
+        tag = _annotate_value(v, [("<", 2, " [CONCERN — very recent unsecured activity]")])
+        lines.append(f"    Months Since Last Unsecured Trade: {_fmt(v)}{tag}")
+    v = _val("total_trades")
+    if v is not None:
+        lines.append(f"    Total Trades (All Types): {v}")
+
+    # --- DPD & Delinquency ---
+    lines.append("  DPD & DELINQUENCY:")
+    for field, label in [("max_dpd_6m_cc", "Max DPD Last 6M (CC)"),
+                          ("max_dpd_6m_pl", "Max DPD Last 6M (PL)"),
+                          ("max_dpd_9m_cc", "Max DPD Last 9M (CC)")]:
+        v = _val(field)
+        if v is not None:
+            tag = _annotate_value(v, [(">", 90, " [HIGH RISK — severe delinquency]"),
+                                       (">", 30, " [MODERATE RISK — significant DPD]"),
+                                       (">", 0, " [CONCERN — past due detected]"),
+                                       ("==", 0, " [CLEAN]")])
+            lines.append(f"    {label}: {v}{tag}")
+    v = _val("months_since_last_0p_pl")
+    if v is not None:
+        tag = _annotate_value(v, [(">=", 24, " [POSITIVE — no PL delinquency in 2+ years]"),
+                                   (">=", 12, " [POSITIVE — clean for 1+ year]"),
+                                   ("<", 6, " [CONCERN — recent PL delinquency]")])
+        lines.append(f"    Months Since Last 0+ DPD (PL): {_fmt(v)}{tag}")
+    v = _val("months_since_last_0p_uns")
+    if v is not None:
+        tag = _annotate_value(v, [(">=", 24, " [POSITIVE — no unsecured delinquency in 2+ years]"),
+                                   ("<", 6, " [CONCERN — recent unsecured delinquency]")])
+        lines.append(f"    Months Since Last 0+ DPD (Unsecured): {_fmt(v)}{tag}")
+
+    # --- Payment Behavior ---
+    lines.append("  PAYMENT BEHAVIOR:")
+    v = _val("pct_missed_payments_18m")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 10, " [HIGH RISK — frequent missed payments]"),
+                                   (">", 0, " [CONCERN — some missed payments]"),
+                                   ("==", 0, " [POSITIVE — no missed payments]")])
+        lines.append(f"    % Missed Payments Last 18M: {_fmt(v)}{tag}")
+    v = _val("pct_0plus_24m_all")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 10, " [HIGH RISK]"), (">", 0, " [CONCERN]"),
+                                   ("==", 0, " [CLEAN]")])
+        lines.append(f"    % Trades with 0+ DPD in 24M (All): {_fmt(v)}{tag}")
+    v = _val("pct_0plus_24m_pl")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 10, " [HIGH RISK]"), (">", 0, " [CONCERN]"),
+                                   ("==", 0, " [CLEAN]")])
+        lines.append(f"    % Trades with 0+ DPD in 24M (PL): {_fmt(v)}{tag}")
+    v = _val("pct_trades_0plus_12m")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 10, " [HIGH RISK]"), (">", 0, " [CONCERN]"),
+                                   ("==", 0, " [CLEAN]")])
+        lines.append(f"    % Trades with 0+ DPD in 12M (All): {_fmt(v)}{tag}")
+    v = _val("ratio_good_closed_pl")
+    if v is not None:
+        tag = _annotate_value(v, [(">=", 0.8, " [POSITIVE — strong closure track record]"),
+                                   ("<", 0.5, " [HIGH RISK — poor closure history]"),
+                                   ("<", 0.7, " [CONCERN — below average closure quality]")])
+        lines.append(f"    Ratio Good Closed PL Loans: {_fmt(v)}{tag}")
+
+    # --- Utilization ---
+    lines.append("  UTILIZATION:")
+    v = _val("cc_balance_utilization_pct")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 75, " [HIGH RISK — over-utilized]"),
+                                   (">", 50, " [MODERATE RISK — elevated utilization]"),
+                                   ("<=", 30, " [HEALTHY]")])
+        lines.append(f"    CC Balance Utilization: {_fmt(v)}%{tag}")
+    v = _val("pl_balance_remaining_pct")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 80, " [HIGH RISK — most PL balance still outstanding]"),
+                                   (">", 50, " [MODERATE — significant PL balance remaining]"),
+                                   ("<=", 30, " [POSITIVE — largely repaid]")])
+        lines.append(f"    PL Balance Remaining: {_fmt(v)}%{tag}")
+
+    # --- Enquiry Behavior ---
+    lines.append("  ENQUIRY BEHAVIOR:")
+    v = _val("unsecured_enquiries_12m")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 15, " [HIGH RISK — very high enquiry pressure]"),
+                                   (">", 10, " [MODERATE RISK — elevated enquiry pressure]"),
+                                   ("<=", 3, " [HEALTHY — minimal enquiry activity]")])
+        lines.append(f"    Unsecured Enquiries Last 12M: {v}{tag}")
+    v = _val("trade_to_enquiry_ratio_uns_24m")
+    if v is not None:
+        tag = _annotate_value(v, [(">", 50, " [POSITIVE — high conversion rate]"),
+                                   ("<", 20, " [CONCERN — low conversion, possible rejections]")])
+        lines.append(f"    Trade-to-Enquiry Ratio (Unsec 24M): {_fmt(v)}%{tag}")
+
+    # --- Loan Acquisition Velocity ---
+    lines.append("  LOAN ACQUISITION VELOCITY:")
+    for field, label in [("interpurchase_time_12m_plbl", "PL/BL (12M)"),
+                          ("interpurchase_time_6m_plbl", "PL/BL (6M)"),
+                          ("interpurchase_time_24m_all", "All Loans (24M)"),
+                          ("interpurchase_time_12m_cl", "Consumer Loans (12M)")]:
+        v = _val(field)
+        if v is not None:
+            tag = _annotate_value(v, [("<", 1, " [HIGH RISK — rapid loan stacking]"),
+                                       ("<", 2, " [CONCERN — frequent acquisitions]"),
+                                       (">=", 6, " [HEALTHY — measured pace]")])
+            lines.append(f"    Avg Interpurchase Time {label}: {_fmt(v)} months{tag}")
+    # Include HL/LAP and TWL only if present (less common)
+    for field, label in [("interpurchase_time_9m_hl_lap", "HL/LAP (9M)"),
+                          ("interpurchase_time_24m_hl_lap", "HL/LAP (24M)"),
+                          ("interpurchase_time_24m_twl", "TWL (24M)")]:
+        v = _val(field)
+        if v is not None:
+            lines.append(f"    Avg Interpurchase Time {label}: {_fmt(v)} months")
+
+    # --- Interaction Signals (deterministic, computed from feature combinations) ---
+    interaction_signals = _compute_interaction_signals(tf_dict)
+    if interaction_signals:
+        lines.append("  COMPOSITE RISK SIGNALS:")
+        for signal in interaction_signals:
+            lines.append(f"    >> {signal}")
+
+    return "\n".join(lines)
+
+
+def _compute_interaction_signals(tf_dict: dict) -> list:
+    """Compute interaction-based risk signals from feature combinations.
+
+    These are deterministic interpretations that require looking at
+    multiple features together — something the LLM shouldn't do.
+    """
+    signals = []
+
+    enquiries = tf_dict.get("unsecured_enquiries_12m")
+    ipt_plbl = tf_dict.get("interpurchase_time_12m_plbl")
+    new_pl_6m = tf_dict.get("new_trades_6m_pl")
+
+    # Credit hungry + loan stacking
+    if enquiries is not None and enquiries > 10 and new_pl_6m is not None and new_pl_6m >= 2:
+        signals.append("CREDIT HUNGRY + LOAN STACKING: High enquiry activity ({}x in 12M) "
+                        "combined with {} new PL trades in 6M".format(enquiries, new_pl_6m))
+
+    # Rapid loan stacking with low interpurchase time
+    if ipt_plbl is not None and ipt_plbl < 2 and new_pl_6m is not None and new_pl_6m >= 2:
+        signals.append("RAPID PL STACKING: Avg {:.1f} months between PL/BL acquisitions "
+                        "with {} new trades in 6M".format(ipt_plbl, new_pl_6m))
+
+    # Clean repayment profile
+    dpd_6m_cc = tf_dict.get("max_dpd_6m_cc")
+    dpd_6m_pl = tf_dict.get("max_dpd_6m_pl")
+    dpd_9m_cc = tf_dict.get("max_dpd_9m_cc")
+    missed = tf_dict.get("pct_missed_payments_18m")
+    good_ratio = tf_dict.get("ratio_good_closed_pl")
+    pct_0p_24m = tf_dict.get("pct_0plus_24m_all")
+
+    all_dpd_clean = all(v is not None and v == 0 for v in [dpd_6m_cc, dpd_6m_pl, dpd_9m_cc])
+    missed_clean = missed is not None and missed == 0
+    pct_clean = pct_0p_24m is not None and pct_0p_24m == 0
+
+    if all_dpd_clean and missed_clean and pct_clean:
+        msg = "CLEAN REPAYMENT PROFILE: Zero DPD across all products and windows, no missed payments"
+        if good_ratio is not None and good_ratio >= 0.8:
+            msg += f", {good_ratio:.0%} good PL closure ratio"
+        signals.append(msg)
+
+    # High utilization + high outstanding
+    cc_util = tf_dict.get("cc_balance_utilization_pct")
+    pl_bal = tf_dict.get("pl_balance_remaining_pct")
+    if cc_util is not None and cc_util > 50 and pl_bal is not None and pl_bal > 50:
+        signals.append("ELEVATED LEVERAGE: CC utilization at {:.1f}% and {:.1f}% "
+                        "PL balance still outstanding".format(cc_util, pl_bal))
+
+    # High enquiries but low conversion (possible repeated rejections)
+    trade_ratio = tf_dict.get("trade_to_enquiry_ratio_uns_24m")
+    if enquiries is not None and enquiries > 10 and trade_ratio is not None and trade_ratio < 30:
+        signals.append("LOW CONVERSION: High enquiry volume ({}) but only {:.1f}% "
+                        "trade-to-enquiry conversion — suggests possible rejections".format(
+                            enquiries, trade_ratio))
+
+    return signals
+
+
+def _build_bureau_data_summary(executive_inputs, tradeline_features=None) -> str:
     """Format BureauExecutiveSummaryInputs into a text block for the LLM prompt.
 
     Args:
         executive_inputs: BureauExecutiveSummaryInputs dataclass instance.
+        tradeline_features: Optional TradelineFeatures dataclass instance.
 
     Returns:
         Formatted text summary string.
@@ -424,11 +663,17 @@ def _build_bureau_data_summary(executive_inputs) -> str:
                 f"Outstanding: {vec_data.get('total_outstanding_amount', 0):,.0f}"
             )
 
+    # Tradeline behavioral features
+    if tradeline_features is not None:
+        lines.append("\nBehavioral & Risk Features:")
+        lines.append(_format_tradeline_features_for_prompt(tradeline_features))
+
     return "\n".join(lines)
 
 
 def generate_bureau_review(
     executive_inputs,
+    tradeline_features=None,
     model_name: str = SUMMARY_MODEL,
 ) -> Optional[str]:
     """Generate an LLM-based bureau portfolio review from executive summary inputs.
@@ -437,12 +682,13 @@ def generate_bureau_review(
 
     Args:
         executive_inputs: BureauExecutiveSummaryInputs (dataclass or dict).
+        tradeline_features: Optional TradelineFeatures (dataclass or dict).
         model_name: Ollama model to use.
 
     Returns:
         Generated narrative string, or None if generation fails.
     """
-    data_summary = _build_bureau_data_summary(executive_inputs)
+    data_summary = _build_bureau_data_summary(executive_inputs, tradeline_features)
 
     if not data_summary:
         return None

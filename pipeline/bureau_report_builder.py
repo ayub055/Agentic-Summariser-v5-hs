@@ -11,6 +11,7 @@ from schemas.customer_report import ReportMeta
 from schemas.bureau_report import BureauReport
 from pipeline.bureau_feature_extractor import extract_bureau_features
 from pipeline.bureau_feature_aggregator import aggregate_bureau_features
+from pipeline.tradeline_feature_extractor import extract_tradeline_features
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,13 @@ def build_bureau_report(customer_id: int) -> BureauReport:
     # 2. Feature aggregation
     executive_inputs = aggregate_bureau_features(feature_vectors)
 
+    # 2b. Tradeline feature extraction (pre-computed, fail-soft)
+    tradeline_features = None
+    try:
+        tradeline_features = extract_tradeline_features(customer_id)
+    except Exception as e:
+        logger.warning(f"Tradeline feature extraction failed for {customer_id}: {e}")
+
     # 3. Build meta
     meta = ReportMeta(
         customer_id=customer_id,
@@ -81,6 +89,7 @@ def build_bureau_report(customer_id: int) -> BureauReport:
         meta=meta,
         feature_vectors=feature_vectors,
         executive_inputs=executive_inputs,
+        tradeline_features=tradeline_features,
     )
 
     # 5. Validate (fail-soft: log warnings, return partial report)
