@@ -163,7 +163,8 @@ def _build_feature_vector(
 ) -> BureauLoanFeatureVector:
     """Build a single feature vector for a group of tradelines of the same loan type."""
     loan_count = len(tradelines)
-    secured = is_secured(loan_type)
+    # Secured if any tradeline in this group has a secured raw loan type
+    secured = any(is_secured(tl.get("loan_type", "")) for tl in tradelines)
 
     total_sanctioned = sum(_safe_float(tl.get("sanction_amount", "")) for tl in tradelines)
     total_outstanding = sum(_safe_float(tl.get("out_standing_balance", "")) for tl in tradelines)

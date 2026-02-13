@@ -14,7 +14,6 @@ from jinja2 import Environment, FileSystemLoader
 from fpdf import FPDF
 
 from schemas.bureau_report import BureauReport
-from schemas.loan_type import SECURED_LOAN_TYPES
 from pipeline.pdf_renderer import ReportPDF, _sanitize_text
 from utils.helpers import mask_customer_id
 
@@ -80,7 +79,7 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
 
     pdf.set_font("Helvetica", "", 7)
     for loan_type, vec in report.feature_vectors.items():
-        secured = "Y" if loan_type in SECURED_LOAN_TYPES else "N"
+        secured = "Y" if vec.secured else "N"
         util = f"{vec.utilization_ratio:.0f}" if vec.utilization_ratio is not None else "-"
         max_dpd = str(vec.max_dpd) if vec.max_dpd is not None else "-"
 
@@ -179,7 +178,7 @@ def render_bureau_report_html(report: BureauReport) -> str:
     for loan_type, vec in report.feature_vectors.items():
         vec_dict = asdict(vec)
         vec_dict["loan_type_display"] = loan_type.value
-        vec_dict["secured"] = loan_type in SECURED_LOAN_TYPES
+        vec_dict["secured"] = vec.secured
         vectors_data.append(vec_dict)
 
     template = env.get_template("bureau_report.html")

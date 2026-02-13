@@ -8,7 +8,7 @@ the LLM narration layer will see.
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from schemas.loan_type import LoanType, SECURED_LOAN_TYPES
+from schemas.loan_type import LoanType
 from features.bureau_features import BureauLoanFeatureVector
 
 
@@ -57,7 +57,7 @@ def aggregate_bureau_features(
         total_outstanding += vec.total_outstanding_amount
 
         # Unsecured exposure = sanctioned amount for non-secured loan types
-        if loan_type not in SECURED_LOAN_TYPES:
+        if not vec.secured:
             unsecured_exposure += vec.total_sanctioned_amount
 
         # Delinquency across portfolio
