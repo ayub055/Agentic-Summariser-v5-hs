@@ -51,10 +51,23 @@ class TransactionPipeline:
         self.audit = AuditLogger()
         self.use_llm_explainer = use_llm_explainer
         self.verbose = verbose
+        self.active_customer_id: Optional[int] = None
 
     def _log(self, msg: str):
         if self.verbose:
             print(msg)
+
+    def resolve_customer_id(self, intent: ParsedIntent):
+        """Apply active customer fallback and update tracking.
+
+        If the current query has a customer_id, remember it.
+        If not, fall back to the last-used customer_id.
+        """
+        if intent.customer_id is not None:
+            self.active_customer_id = intent.customer_id
+        elif self.active_customer_id is not None:
+            intent.customer_id = self.active_customer_id
+            self._log(f"    [Session] Using active customer: {mask_customer_id(self.active_customer_id)}")
 
     def _should_get_insights(self, intent: ParsedIntent) -> bool:
         """Check if this intent benefits from transaction insights."""
@@ -70,6 +83,7 @@ class TransactionPipeline:
         # Phase 1: Parse intent
         self._log("\n[1] Parsing intent...")
         intent = self.parser.parse(user_query)
+        self.resolve_customer_id(intent)
         self._log(f"    Intent: {intent.intent.value}")
         self._log(f"    Customer: {mask_customer_id(intent.customer_id) if intent.customer_id else 'N/A'}")
         if intent.category:
@@ -145,6 +159,7 @@ class TransactionPipeline:
         # Phase 1: Parse intent
         self._log("\n[1] Parsing intent...")
         intent = self.parser.parse(user_query)
+        self.resolve_customer_id(intent)
         self._log(f"    Intent: {intent.intent.value}")
         self._log(f"    Customer: {mask_customer_id(intent.customer_id) if intent.customer_id else 'N/A'}")
         if intent.category:

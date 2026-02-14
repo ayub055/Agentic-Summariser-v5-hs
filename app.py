@@ -650,6 +650,10 @@ def process_query(query: str):
         parser = get_parser()
         intent = parser.parse(query)
 
+        # Resolve customer_id from session (fallback to last-used customer)
+        pipeline = get_pipeline()
+        pipeline.resolve_customer_id(intent)
+
         # Build extra info for stage display
         intent_info = f"Intent: {intent.intent.value}"
         if intent.customer_id:
@@ -661,7 +665,6 @@ def process_query(query: str):
         # ==========================================================================
         # STAGE 2: Create Plan
         # ==========================================================================
-        pipeline = get_pipeline()
         planner = pipeline.planner
 
         plan, error = planner.create_plan(intent)
