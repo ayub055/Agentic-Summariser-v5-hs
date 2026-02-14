@@ -5,6 +5,10 @@ from typing import List, Dict, Any
 from schemas.response import ToolResult
 from tools import analytics
 from tools.category_resolver import category_presence_lookup
+from tools.bureau_chat import (
+    bureau_credit_card_info, bureau_loan_type_info,
+    bureau_delinquency_check, bureau_overview,
+)
 from pipeline.report_orchestrator import generate_customer_report_pdf
 from tools.bureau import generate_bureau_report_pdf
 
@@ -63,6 +67,12 @@ class ToolExecutor:
 
             # Bureau report
             "generate_bureau_report": _generate_bureau_report_with_pdf,
+
+            # Bureau chat tools
+            "bureau_credit_card_info": bureau_credit_card_info,
+            "bureau_loan_type_info": bureau_loan_type_info,
+            "bureau_delinquency_check": bureau_delinquency_check,
+            "bureau_overview": bureau_overview,
 
             # Category presence lookup
             "category_presence_lookup": category_presence_lookup,

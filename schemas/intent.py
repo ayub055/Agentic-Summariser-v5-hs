@@ -35,6 +35,12 @@ class IntentType(str, Enum):
     # Bureau report
     BUREAU_REPORT = "bureau_report"
 
+    # Bureau chat (lightweight queries)
+    BUREAU_CREDIT_CARDS = "bureau_credit_cards"
+    BUREAU_LOAN_COUNT = "bureau_loan_count"
+    BUREAU_DELINQUENCY = "bureau_delinquency"
+    BUREAU_OVERVIEW = "bureau_overview"
+
     UNKNOWN = "unknown"
 
 

@@ -36,7 +36,9 @@ VALID_INTENTS = [
     # Category presence
     "category_presence_lookup",
     # Bureau report
-    "bureau_report"
+    "bureau_report",
+    # Bureau chat
+    "bureau_credit_cards", "bureau_loan_count", "bureau_delinquency", "bureau_overview"
 ]
 
 PARSER_PROMPT = """You are a JSON extractor for a transaction analysis system. Extract intent from the query below.
@@ -63,6 +65,10 @@ INTENTS (choose the most specific one):
 - cash_flow: Monthly cash flow (inflows vs outflows)
 - category_presence_lookup: Check if customer has transactions for a specific category/behavior (e.g., betting, salary, rent, entertainment)
 - bureau_report: Generate a bureau/credit bureau/CIBIL tradeline report for a customer
+- bureau_credit_cards: Check if customer has credit cards, get count and utilization
+- bureau_loan_count: How many loans of a specific type (personal loan, home loan, etc.) the customer has. Put the loan type in "category" field.
+- bureau_delinquency: Check if any loan or specific loan type is delinquent or has DPD. Put the loan type in "category" field if specified.
+- bureau_overview: General bureau/tradeline summary (total tradelines, exposure, outstanding) without generating a full report
 - unknown: If query doesn't match any intent
 
 IMPORTANT for customer_report:
@@ -93,6 +99,24 @@ Examples for bureau_report:
 - "Bureau report for customer 100384958" -> intent=bureau_report, customer_id=100384958
 - "CIBIL report for 100384958" -> intent=bureau_report, customer_id=100384958
 - "Tradeline report for customer 100384958" -> intent=bureau_report, customer_id=100384958
+
+IMPORTANT for bureau chat queries (these are quick lookups, NOT full report generation):
+- "Are there any credit cards?" -> intent=bureau_credit_cards
+- "Credit card utilization?" -> intent=bureau_credit_cards
+- "Does he have credit cards?" -> intent=bureau_credit_cards
+- "How many personal loans?" -> intent=bureau_loan_count, category=personal_loan
+- "How many home loans does he have?" -> intent=bureau_loan_count, category=home_loan
+- "Loan count for business loan" -> intent=bureau_loan_count, category=business_loan
+- "What loans does he have?" -> intent=bureau_loan_count
+- "Is any loan delinquent?" -> intent=bureau_delinquency
+- "Any DPD on personal loan?" -> intent=bureau_delinquency, category=personal_loan
+- "Is there any overdue?" -> intent=bureau_delinquency
+- "Bureau summary" -> intent=bureau_overview
+- "Tradeline overview" -> intent=bureau_overview
+- "What does the bureau look like?" -> intent=bureau_overview
+- "Bureau details" -> intent=bureau_overview
+
+LOAN TYPES for bureau queries: personal_loan, credit_card, home_loan, auto_loan, business_loan, gold_loan, two_wheeler_loan, consumer_durable, lap_las_lad, other
 
 CATEGORIES: MNC_Companies, Digital_Betting_Gaming, Food, Liquor_Smoke, Bank_Fees_Charges, Mobile_Bills, Wallets, E_Commerce, Courier_Logistics, Air_Travel, E_Entertainment, Mobility, Railway, Govt_Tax_Challan, Hospital, Grocery, Fashion_Beauty, Equipment_Construction, Pharmacy, Engineering, Kids_School, Education, Rent, Jewelry_Premium_Gifts, Foreign_Transaction, Payroll, Investment, Salary, Electronics_Appliance, Charity_Donations, Books_Stationery, Fuel, Govt_Companies, Hotel, Insurance, Personal_Home_Services, Pet_Care, Taxi_Cab, Real_Estate, Sports_Fitness, EMI, Finance, P2P
 
@@ -195,12 +219,17 @@ class IntentParser:
             data["intent"] = validate_intent_name(intent_str)
 
             # Normalize category if present
-            # Skip normalization for CATEGORY_PRESENCE_LOOKUP - it has its own resolver
+            # Skip normalization for intents that use category for non-transaction purposes
+            _skip_category_norm = {
+                IntentType.CATEGORY_PRESENCE_LOOKUP,
+                IntentType.BUREAU_LOAN_COUNT,
+                IntentType.BUREAU_DELINQUENCY,
+            }
             if data.get("category"):
-                if data["intent"] != IntentType.CATEGORY_PRESENCE_LOOKUP:
+                if data["intent"] not in _skip_category_norm:
                     normalized = normalize_category_name(data["category"])
                     data["category"] = normalized  # May be None if invalid
-                # else: keep category as-is for category_presence_lookup
+                # else: keep category as-is (loan type or category resolver handles it)
 
             # Normalize categories list if present
             if data.get("categories") and isinstance(data["categories"], list):
@@ -289,8 +318,18 @@ class IntentParser:
                     confidence=0.75
                 )
 
-        # Report intents (bureau checked first — more specific than generic "report")
-        if any(kw in query_lower for kw in ["bureau report", "bureau", "cibil report", "cibil", "tradeline report", "credit bureau"]):
+        # Bureau chat intents (checked before bureau_report to avoid catch-all)
+        if any(kw in query_lower for kw in ["credit card util", "credit card count", "any credit card", "has credit card", "have credit card"]):
+            intent = IntentType.BUREAU_CREDIT_CARDS
+        elif any(kw in query_lower for kw in ["delinquen", "dpd", "overdue", "default", "is any loan"]):
+            intent = IntentType.BUREAU_DELINQUENCY
+        elif any(kw in query_lower for kw in ["how many"]) and any(kw in query_lower for kw in ["loan", "tradeline", "pl", "hl", "bl"]):
+            intent = IntentType.BUREAU_LOAN_COUNT
+        elif any(kw in query_lower for kw in ["bureau summary", "bureau overview", "tradeline summary", "tradeline overview", "bureau detail", "what does the bureau"]):
+            intent = IntentType.BUREAU_OVERVIEW
+
+        # Report intents (bureau report — full PDF generation)
+        elif any(kw in query_lower for kw in ["bureau report", "cibil report", "tradeline report", "credit bureau"]):
             intent = IntentType.BUREAU_REPORT
         elif any(kw in query_lower for kw in ["full report", "customer report", "comprehensive report", "complete report", "generate report", "create report", "make report", "report for", "generate a report", "pdf report"]):
             intent = IntentType.CUSTOMER_REPORT

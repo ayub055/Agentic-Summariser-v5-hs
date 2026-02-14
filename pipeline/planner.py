@@ -106,8 +106,13 @@ class QueryPlanner:
         if "customer_id" in required:
             if intent.customer_id is None:
                 return "Customer ID is required"
-            # Bureau report validates against bureau CRNs, not banking customers
-            if intent.intent == IntentType.BUREAU_REPORT:
+            # Bureau intents validate against bureau CRNs, not banking customers
+            bureau_intents = {
+                IntentType.BUREAU_REPORT, IntentType.BUREAU_CREDIT_CARDS,
+                IntentType.BUREAU_LOAN_COUNT, IntentType.BUREAU_DELINQUENCY,
+                IntentType.BUREAU_OVERVIEW,
+            }
+            if intent.intent in bureau_intents:
                 if intent.customer_id not in self.valid_bureau_customers:
                     return f"Customer {intent.customer_id} not found in bureau data. Valid CRNs: {sorted(self.valid_bureau_customers)[:10]}"
             elif intent.customer_id not in self.valid_customers:
@@ -210,5 +215,14 @@ class QueryPlanner:
         elif tool_name == "category_presence_lookup":
             args["customer_id"] = intent.customer_id
             args["category"] = intent.category
+
+        # Bureau chat tools
+        elif tool_name in ["bureau_credit_card_info", "bureau_overview"]:
+            args["customer_id"] = intent.customer_id
+
+        elif tool_name in ["bureau_loan_type_info", "bureau_delinquency_check"]:
+            args["customer_id"] = intent.customer_id
+            if intent.category:
+                args["loan_type"] = intent.category
 
         return args
