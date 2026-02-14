@@ -16,7 +16,8 @@ from langchain_ollama import ChatOllama
 
 from schemas.customer_report import CustomerReport
 from data.loader import get_transactions_df
-from utils.helpers import mask_customer_id
+from utils.helpers import mask_customer_id, format_inr
+from schemas.loan_type import get_loan_type_display_name
 from config.settings import EXPLAINER_MODEL
 
 
@@ -378,13 +379,14 @@ BUREAU_REVIEW_PROMPT = """You are a senior credit analyst writing an executive s
 IMPORTANT RULES:
 - Only reference numbers and risk annotations provided below — do NOT invent figures
 - No arithmetic — just narrate the pre-computed values and their tagged interpretations
-- Features tagged [HIGH RISK], [MODERATE RISK], or [CONCERN] are red flags — highlight them
-- Features tagged [POSITIVE], [CLEAN], or [HEALTHY] are green signals — acknowledge them
-- Do NOT repeat raw numbers without context — use the interpretation provided
+- Features tagged [HIGH RISK], [MODERATE RISK], or [CONCERN] are red flags — highlight them in the Behavioral Insights paragraph only
+- Features tagged [POSITIVE], [CLEAN], or [HEALTHY] are green signals — acknowledge them in the Behavioral Insights paragraph only
 
 STRUCTURE YOUR RESPONSE IN TWO PARAGRAPHS:
-1. PORTFOLIO OVERVIEW (3-4 lines): Tradeline composition, exposure, outstanding, delinquency status
-2. BEHAVIORAL INSIGHTS (4-6 lines): Credit behavior patterns — enquiry pressure, repayment discipline, utilization, loan acquisition velocity. Mention specific risk signals and positive signals by name.
+
+1. PORTFOLIO OVERVIEW (6-10 lines): A factual summary of the customer's tradeline portfolio so the reader does not have to look at the raw data. Start with the big picture — total tradelines (how many live, how many closed), which loan products are present, total sanctioned exposure, total outstanding, and unsecured exposure. Then weave in the key highlights that stand out from the behavioral features: credit card utilization percentage, any DPD values above zero, missed payment percentages, enquiry counts, loan acquisition velocity, and any loan product counts that are unusually high. Present these as natural facts within the narrative flow — not as a separate list. NO risk commentary, NO opinions, NO concern flags — just state the portfolio composition and the notable data points together in one cohesive summary.
+
+2. BEHAVIORAL INSIGHTS (4-6 lines): Now provide the risk interpretation. Use the tagged annotations ([HIGH RISK], [POSITIVE], etc.) and the COMPOSITE RISK SIGNALS to narrate the customer's credit behavior — enquiry pressure, repayment discipline, utilization, loan acquisition velocity. Mention specific signals by name.
 
 Bureau Portfolio Summary:
 {data_summary}
@@ -643,24 +645,32 @@ def _build_bureau_data_summary(executive_inputs, tradeline_features=None) -> str
         f"Total Tradelines: {data.get('total_tradelines', 0)}",
         f"Live Tradelines: {data.get('live_tradelines', 0)}",
         f"Closed Tradelines: {data.get('closed_tradelines', 0)}",
-        f"Total Exposure (Sanctioned): {data.get('total_exposure', 0):,.0f}",
-        f"Total Outstanding: {data.get('total_outstanding', 0):,.0f}",
-        f"Unsecured Exposure: {data.get('unsecured_exposure', 0):,.0f}",
+        f"Total Exposure (Sanctioned): INR {format_inr(data.get('total_exposure', 0))}",
+        f"Total Outstanding: INR {format_inr(data.get('total_outstanding', 0))}",
+        f"Unsecured Exposure: INR {format_inr(data.get('unsecured_exposure', 0))}",
         f"Delinquency Flag: {'Yes' if data.get('has_delinquency') else 'No'}",
         f"Max DPD (Days Past Due): {data.get('max_dpd', 'N/A')}",
     ]
+
+    # Add CC utilization if available in product breakdown
+    for loan_type_key, vec in product_breakdown.items():
+        vec_data = asdict(vec) if not isinstance(vec, dict) else vec
+        util = vec_data.get("utilization_ratio")
+        if util is not None:
+            lt_display = get_loan_type_display_name(loan_type_key)
+            lines.append(f"{lt_display} Utilization: {util * 100:.1f}%")
 
     # Product breakdown
     if product_breakdown:
         lines.append("\nProduct-wise Breakdown:")
         for loan_type_key, vec in product_breakdown.items():
             vec_data = asdict(vec) if not isinstance(vec, dict) else vec
-            lt_name = loan_type_key if isinstance(loan_type_key, str) else loan_type_key.value
+            lt_display = get_loan_type_display_name(loan_type_key)
             lines.append(
-                f"  - {lt_name}: {vec_data.get('loan_count', 0)} accounts "
+                f"  - {lt_display}: {vec_data.get('loan_count', 0)} accounts "
                 f"(Live: {vec_data.get('live_count', 0)}, Closed: {vec_data.get('closed_count', 0)}), "
-                f"Sanctioned: {vec_data.get('total_sanctioned_amount', 0):,.0f}, "
-                f"Outstanding: {vec_data.get('total_outstanding_amount', 0):,.0f}"
+                f"Sanctioned: INR {format_inr(vec_data.get('total_sanctioned_amount', 0))}, "
+                f"Outstanding: INR {format_inr(vec_data.get('total_outstanding_amount', 0))}"
             )
 
     # Tradeline behavioral features

@@ -8,6 +8,41 @@ def format_currency(amount: float) -> str:
     return f"${amount:,.2f}"
 
 
+def format_inr(amount: float) -> str:
+    """Format a number with Indian comma placement (lakhs/crores).
+
+    Indian system: 1,00,00,000 (1 crore), 10,00,000 (10 lakh), 1,00,000 (1 lakh).
+    The last three digits are grouped, then every two digits thereafter.
+
+    Args:
+        amount: Numeric value to format.
+
+    Returns:
+        String with Indian-style commas, no decimals. E.g. '1,85,72,860'.
+    """
+    is_negative = amount < 0
+    num = abs(int(round(amount)))
+    s = str(num)
+
+    if len(s) <= 3:
+        result = s
+    else:
+        # Last 3 digits
+        last3 = s[-3:]
+        rest = s[:-3]
+        # Group remaining digits in pairs from right
+        parts = []
+        while len(rest) > 2:
+            parts.append(rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.append(rest)
+        parts.reverse()
+        result = ",".join(parts) + "," + last3
+
+    return f"-{result}" if is_negative else result
+
+
 def print_header(title: str, char: str = "=", width: int = 60):
     """Print a formatted header."""
     print(char * width)

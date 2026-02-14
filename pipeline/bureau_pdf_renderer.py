@@ -14,8 +14,9 @@ from jinja2 import Environment, FileSystemLoader
 from fpdf import FPDF
 
 from schemas.bureau_report import BureauReport
+from schemas.loan_type import get_loan_type_display_name
 from pipeline.pdf_renderer import ReportPDF, _sanitize_text
-from utils.helpers import mask_customer_id
+from utils.helpers import mask_customer_id, format_inr
 
 
 class BureauReportPDF(ReportPDF):
@@ -67,9 +68,9 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
     ei = report.executive_inputs
     pdf.key_value("Live Tradelines", str(ei.live_tradelines))
     pdf.key_value("Closed Tradelines", str(ei.closed_tradelines))
-    pdf.key_value("Total Exposure", f"{ei.total_exposure:,.0f} {report.meta.currency}")
-    pdf.key_value("Total Outstanding", f"{ei.total_outstanding:,.0f} {report.meta.currency}")
-    pdf.key_value("Unsecured Exposure", f"{ei.unsecured_exposure:,.0f} {report.meta.currency}")
+    pdf.key_value("Total Exposure", f"INR {format_inr(ei.total_exposure)}")
+    pdf.key_value("Total Outstanding", f"INR {format_inr(ei.total_outstanding)}")
+    pdf.key_value("Unsecured Exposure", f"INR {format_inr(ei.unsecured_exposure)}")
     pdf.key_value("Delinquency", "Yes" if ei.has_delinquency else "No")
     pdf.key_value("Max DPD", str(ei.max_dpd) if ei.max_dpd is not None else "N/A")
     pdf.ln(5)
@@ -104,13 +105,13 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         max_dpd = str(vec.max_dpd) if vec.max_dpd is not None else "-"
 
         values = [
-            loan_type.value[:12],
+            get_loan_type_display_name(loan_type)[:14],
             secured,
             str(vec.loan_count),
             str(vec.live_count),
             str(vec.closed_count),
-            f"{vec.total_sanctioned_amount:,.0f}",
-            f"{vec.total_outstanding_amount:,.0f}",
+            format_inr(vec.total_sanctioned_amount),
+            format_inr(vec.total_outstanding_amount),
             max_dpd,
             util,
             str(vec.on_us_count),
@@ -118,7 +119,7 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         ]
 
         for val, width in zip(values, widths):
-            display_val = str(val)[:12]
+            display_val = str(val)[:14]
             pdf.cell(width, 6, display_val, border=1, align="C")
         pdf.ln()
 
@@ -130,8 +131,8 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         str(ei.total_tradelines),
         str(ei.live_tradelines),
         str(ei.closed_tradelines),
-        f"{ei.total_exposure:,.0f}",
-        f"{ei.total_outstanding:,.0f}",
+        format_inr(ei.total_exposure),
+        format_inr(ei.total_outstanding),
         str(ei.max_dpd) if ei.max_dpd is not None else "-",
         "", "", ""
     ]
@@ -246,12 +247,13 @@ def render_bureau_report_html(report: BureauReport) -> str:
         autoescape=True,
     )
     env.filters["mask_id"] = mask_customer_id
+    env.filters["inr"] = format_inr
 
     # Prepare template data — convert feature vectors to dicts for Jinja
     vectors_data = []
     for loan_type, vec in report.feature_vectors.items():
         vec_dict = asdict(vec)
-        vec_dict["loan_type_display"] = loan_type.value
+        vec_dict["loan_type_display"] = get_loan_type_display_name(loan_type)
         vec_dict["secured"] = vec.secured
         vectors_data.append(vec_dict)
 

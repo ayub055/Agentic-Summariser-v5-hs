@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bureau Report - {{ report.meta.customer_id|mask_id }}</title>
+    <title>Bureau Report - ###4958</title>
     <style>
         * {
             margin: 0;
@@ -169,10 +169,10 @@
     <div class="header">
         <h1>Bureau Tradeline Report</h1>
         <div class="header-meta">
-            <span><strong>Customer ID:</strong> {{ report.meta.customer_id|mask_id }}</span>
-            <span><strong>Generated:</strong> {{ report.meta.generated_at[:10] }}</span>
-            <span><strong>Currency:</strong> {{ report.meta.currency }}</span>
-            <span><strong>Tradelines:</strong> {{ report.executive_inputs.total_tradelines }}</span>
+            <span><strong>Customer ID:</strong> ###4958</span>
+            <span><strong>Generated:</strong> 2026-02-14</span>
+            <span><strong>Currency:</strong> INR</span>
+            <span><strong>Tradelines:</strong> 123</span>
         </div>
     </div>
 
@@ -182,51 +182,57 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>Live Tradelines</label>
-                <div class="value">{{ report.executive_inputs.live_tradelines }}</div>
+                <div class="value">34</div>
             </div>
             <div class="info-item">
                 <label>Closed Tradelines</label>
-                <div class="value">{{ report.executive_inputs.closed_tradelines }}</div>
+                <div class="value">89</div>
             </div>
             <div class="info-item">
                 <label>Total Exposure</label>
-                <div class="value">INR {{ report.executive_inputs.total_exposure|inr }}</div>
+                <div class="value">18,572,860</div>
             </div>
             <div class="info-item">
                 <label>Total Outstanding</label>
-                <div class="value">INR {{ report.executive_inputs.total_outstanding|inr }}</div>
+                <div class="value">4,015,241</div>
             </div>
             <div class="info-item">
                 <label>Unsecured Exposure</label>
-                <div class="value">INR {{ report.executive_inputs.unsecured_exposure|inr }}</div>
+                <div class="value">9,040,983</div>
             </div>
             <div class="info-item">
                 <label>Delinquency</label>
-                <div class="value {% if report.executive_inputs.has_delinquency %}risk{% else %}safe{% endif %}">
-                    {{ "Yes" if report.executive_inputs.has_delinquency else "No" }}
+                <div class="value risk">
+                    Yes
                 </div>
             </div>
             <div class="info-item">
                 <label>Max DPD</label>
-                <div class="value {% if report.executive_inputs.max_dpd and report.executive_inputs.max_dpd > 30 %}risk{% endif %}">
-                    {{ report.executive_inputs.max_dpd if report.executive_inputs.max_dpd is not none else "N/A" }}
+                <div class="value risk">
+                    61
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Executive Summary (LLM narrative) -->
-    {% if report.narrative %}
+    
     <div class="section">
         <h3>Executive Summary</h3>
         <div class="summary-box">
-            <p>{{ report.narrative }}</p>
+            <p>**Portfolio Overview**
+
+The portfolio consists of 123 tradelines with a total exposure of $18,572,860. The majority of the tradelines are closed (89%), indicating a relatively low level of active credit risk. However, there is a **CONCERN** regarding rapid loan acquisition velocity, as evidenced by an average interpurchase time of 0.71 months for all loans and 1.67 months for consumer loans over the past 12 months.
+
+**Behavioral Insights**
+
+The borrower&#39;s credit behavior patterns suggest some red flags, including **HIGH RISK** enquiry pressure with 21 unsecured enquiries in the last 12 months and a trade-to-enquiry ratio of 45.45%. Additionally, there is a **CONCERN** regarding frequent loan acquisitions, as indicated by an average interpurchase time of 1.76 months for PL/BL loans over the past 12 months. However, the borrower&#39;s repayment discipline appears to be strong, with no missed payments and a 90% good closure ratio for PL loans. The absence of delinquencies across all products is also a positive signal, indicating a **GREEN SIGNAL**.</p>
         </div>
     </div>
-    {% endif %}
+    
 
     <!-- Product-wise Breakdown Table -->
-    {% if vectors_data %}
+    
     <div class="section">
         <h3>Product-wise Breakdown</h3>
         <table>
@@ -246,30 +252,158 @@
                 </tr>
             </thead>
             <tbody>
-                {% for vec in vectors_data %}
+                
                 <tr>
-                    <td>{{ vec.loan_type_display }}</td>
-                    <td class="center {% if vec.secured %}secured-yes{% else %}secured-no{% endif %}">
-                        {{ "Yes" if vec.secured else "No" }}
+                    <td>other</td>
+                    <td class="center secured-no">
+                        No
                     </td>
-                    <td class="center">{{ vec.loan_count }}</td>
-                    <td class="center">{{ vec.live_count }}</td>
-                    <td class="center">{{ vec.closed_count }}</td>
-                    <td class="amount">{{ vec.total_sanctioned_amount|inr }}</td>
-                    <td class="amount">{{ vec.total_outstanding_amount|inr }}</td>
-                    <td class="center">{{ vec.max_dpd if vec.max_dpd is not none else "-" }}</td>
-                    <td class="center">{{ "{:.0f}".format(vec.utilization_ratio) if vec.utilization_ratio is not none else "-" }}</td>
-                    <td class="center">{{ vec.on_us_count }}</td>
-                    <td class="center">{{ vec.off_us_count }}</td>
+                    <td class="center">15</td>
+                    <td class="center">0</td>
+                    <td class="center">15</td>
+                    <td class="amount">3,947,694</td>
+                    <td class="amount">0</td>
+                    <td class="center">-</td>
+                    <td class="center">-</td>
+                    <td class="center">3</td>
+                    <td class="center">12</td>
                 </tr>
-                {% endfor %}
+                
+                <tr>
+                    <td>business_loan</td>
+                    <td class="center secured-yes">
+                        Yes
+                    </td>
+                    <td class="center">11</td>
+                    <td class="center">2</td>
+                    <td class="center">9</td>
+                    <td class="amount">1,419,000</td>
+                    <td class="amount">151,657</td>
+                    <td class="center">30</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">11</td>
+                </tr>
+                
+                <tr>
+                    <td>consumer_durable</td>
+                    <td class="center secured-no">
+                        No
+                    </td>
+                    <td class="center">26</td>
+                    <td class="center">6</td>
+                    <td class="center">20</td>
+                    <td class="amount">855,034</td>
+                    <td class="amount">90,527</td>
+                    <td class="center">-</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">26</td>
+                </tr>
+                
+                <tr>
+                    <td>credit_card</td>
+                    <td class="center secured-no">
+                        No
+                    </td>
+                    <td class="center">20</td>
+                    <td class="center">16</td>
+                    <td class="center">4</td>
+                    <td class="amount">2,637,235</td>
+                    <td class="amount">1,511,981</td>
+                    <td class="center">3</td>
+                    <td class="center">0</td>
+                    <td class="center">3</td>
+                    <td class="center">17</td>
+                </tr>
+                
+                <tr>
+                    <td>gold_loan</td>
+                    <td class="center secured-yes">
+                        Yes
+                    </td>
+                    <td class="center">28</td>
+                    <td class="center">4</td>
+                    <td class="center">24</td>
+                    <td class="amount">4,709,000</td>
+                    <td class="amount">1,056,207</td>
+                    <td class="center">-</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">28</td>
+                </tr>
+                
+                <tr>
+                    <td>lap_las_lad</td>
+                    <td class="center secured-yes">
+                        Yes
+                    </td>
+                    <td class="center">4</td>
+                    <td class="center">0</td>
+                    <td class="center">4</td>
+                    <td class="amount">1,898,000</td>
+                    <td class="amount">0</td>
+                    <td class="center">30</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">4</td>
+                </tr>
+                
+                <tr>
+                    <td>personal_loan</td>
+                    <td class="center secured-no">
+                        No
+                    </td>
+                    <td class="center">15</td>
+                    <td class="center">5</td>
+                    <td class="center">10</td>
+                    <td class="amount">1,601,020</td>
+                    <td class="amount">480,098</td>
+                    <td class="center">61</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">15</td>
+                </tr>
+                
+                <tr>
+                    <td>two_wheeler_loan</td>
+                    <td class="center secured-yes">
+                        Yes
+                    </td>
+                    <td class="center">2</td>
+                    <td class="center">0</td>
+                    <td class="center">2</td>
+                    <td class="amount">116,000</td>
+                    <td class="amount">0</td>
+                    <td class="center">39</td>
+                    <td class="center">-</td>
+                    <td class="center">0</td>
+                    <td class="center">2</td>
+                </tr>
+                
+                <tr>
+                    <td>auto_loan</td>
+                    <td class="center secured-yes">
+                        Yes
+                    </td>
+                    <td class="center">2</td>
+                    <td class="center">1</td>
+                    <td class="center">1</td>
+                    <td class="amount">1,389,877</td>
+                    <td class="amount">724,771</td>
+                    <td class="center">-</td>
+                    <td class="center">-</td>
+                    <td class="center">1</td>
+                    <td class="center">1</td>
+                </tr>
+                
             </tbody>
         </table>
     </div>
-    {% endif %}
+    
 
     <!-- Behavioral & Risk Features -->
-    {% if tl_features %}
+    
     <div class="section">
         <h3>Behavioral & Risk Features</h3>
 
@@ -278,19 +412,19 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>Months Since Last PL Trade</label>
-                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_trade_pl) if tl_features.months_since_last_trade_pl is not none else "N/A" }}</div>
+                <div class="value">2.82</div>
             </div>
             <div class="info-item">
                 <label>Months Since Last Unsecured Trade</label>
-                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_trade_uns) if tl_features.months_since_last_trade_uns is not none else "N/A" }}</div>
+                <div class="value">2.69</div>
             </div>
             <div class="info-item">
                 <label>New PL Trades (6M)</label>
-                <div class="value">{{ tl_features.new_trades_6m_pl if tl_features.new_trades_6m_pl is not none else "N/A" }}</div>
+                <div class="value">2</div>
             </div>
             <div class="info-item">
                 <label>Total Trades (All)</label>
-                <div class="value">{{ tl_features.total_trades if tl_features.total_trades is not none else "N/A" }}</div>
+                <div class="value">122</div>
             </div>
         </div>
 
@@ -299,29 +433,29 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>Max DPD 6M (CC)</label>
-                <div class="value {% if tl_features.max_dpd_6m_cc is not none and tl_features.max_dpd_6m_cc > 0 %}risk{% else %}safe{% endif %}">
-                    {{ tl_features.max_dpd_6m_cc if tl_features.max_dpd_6m_cc is not none else "N/A" }}
+                <div class="value safe">
+                    0
                 </div>
             </div>
             <div class="info-item">
                 <label>Max DPD 6M (PL)</label>
-                <div class="value {% if tl_features.max_dpd_6m_pl is not none and tl_features.max_dpd_6m_pl > 0 %}risk{% else %}safe{% endif %}">
-                    {{ tl_features.max_dpd_6m_pl if tl_features.max_dpd_6m_pl is not none else "N/A" }}
+                <div class="value safe">
+                    0
                 </div>
             </div>
             <div class="info-item">
                 <label>Max DPD 9M (CC)</label>
-                <div class="value {% if tl_features.max_dpd_9m_cc is not none and tl_features.max_dpd_9m_cc > 0 %}risk{% else %}safe{% endif %}">
-                    {{ tl_features.max_dpd_9m_cc if tl_features.max_dpd_9m_cc is not none else "N/A" }}
+                <div class="value safe">
+                    0
                 </div>
             </div>
             <div class="info-item">
                 <label>Months Since Last 0+ DPD (Unsecured)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_0p_uns) if tl_features.months_since_last_0p_uns is not none else "N/A" }}</div>
+                <div class="value">N/A</div>
             </div>
             <div class="info-item">
                 <label>Months Since Last 0+ DPD (PL)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_0p_pl) if tl_features.months_since_last_0p_pl is not none else "N/A" }}</div>
+                <div class="value">199.61</div>
             </div>
         </div>
 
@@ -330,30 +464,30 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>% 0+ DPD in 24M (All)</label>
-                <div class="value {% if tl_features.pct_0plus_24m_all is not none and tl_features.pct_0plus_24m_all > 0 %}risk{% else %}safe{% endif %}">
-                    {{ "%.2f"|format(tl_features.pct_0plus_24m_all) if tl_features.pct_0plus_24m_all is not none else "N/A" }}
+                <div class="value safe">
+                    0.00
                 </div>
             </div>
             <div class="info-item">
                 <label>% 0+ DPD in 24M (PL)</label>
-                <div class="value {% if tl_features.pct_0plus_24m_pl is not none and tl_features.pct_0plus_24m_pl > 0 %}risk{% else %}safe{% endif %}">
-                    {{ "%.2f"|format(tl_features.pct_0plus_24m_pl) if tl_features.pct_0plus_24m_pl is not none else "N/A" }}
+                <div class="value safe">
+                    0.00
                 </div>
             </div>
             <div class="info-item">
                 <label>% Missed Payments (18M)</label>
-                <div class="value {% if tl_features.pct_missed_payments_18m is not none and tl_features.pct_missed_payments_18m > 0 %}risk{% else %}safe{% endif %}">
-                    {{ "%.2f"|format(tl_features.pct_missed_payments_18m) if tl_features.pct_missed_payments_18m is not none else "N/A" }}
+                <div class="value safe">
+                    0.00
                 </div>
             </div>
             <div class="info-item">
                 <label>% Trades 0+ DPD in 12M (All)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.pct_trades_0plus_12m) if tl_features.pct_trades_0plus_12m is not none else "N/A" }}</div>
+                <div class="value">N/A</div>
             </div>
             <div class="info-item">
                 <label>Ratio Good Closed Loans (PL)</label>
-                <div class="value {% if tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl >= 0.8 %}safe{% elif tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl < 0.5 %}risk{% endif %}">
-                    {{ "%.2f"|format(tl_features.ratio_good_closed_pl) if tl_features.ratio_good_closed_pl is not none else "N/A" }}
+                <div class="value safe">
+                    0.90
                 </div>
             </div>
         </div>
@@ -363,13 +497,13 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>CC Balance Utilization %</label>
-                <div class="value {% if tl_features.cc_balance_utilization_pct is not none and tl_features.cc_balance_utilization_pct > 75 %}risk{% elif tl_features.cc_balance_utilization_pct is not none and tl_features.cc_balance_utilization_pct <= 30 %}safe{% endif %}">
-                    {{ "%.2f"|format(tl_features.cc_balance_utilization_pct) if tl_features.cc_balance_utilization_pct is not none else "N/A" }}
+                <div class="value ">
+                    35.80
                 </div>
             </div>
             <div class="info-item">
                 <label>PL Balance Remaining %</label>
-                <div class="value">{{ "%.2f"|format(tl_features.pl_balance_remaining_pct) if tl_features.pl_balance_remaining_pct is not none else "N/A" }}</div>
+                <div class="value">55.33</div>
             </div>
         </div>
 
@@ -378,13 +512,13 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>Unsecured Enquiries (12M)</label>
-                <div class="value {% if tl_features.unsecured_enquiries_12m is not none and tl_features.unsecured_enquiries_12m > 10 %}risk{% elif tl_features.unsecured_enquiries_12m is not none and tl_features.unsecured_enquiries_12m <= 3 %}safe{% endif %}">
-                    {{ tl_features.unsecured_enquiries_12m if tl_features.unsecured_enquiries_12m is not none else "N/A" }}
+                <div class="value risk">
+                    21
                 </div>
             </div>
             <div class="info-item">
                 <label>Trade-to-Enquiry Ratio (Unsec 24M)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.trade_to_enquiry_ratio_uns_24m) if tl_features.trade_to_enquiry_ratio_uns_24m is not none else "N/A" }}</div>
+                <div class="value">45.45</div>
             </div>
         </div>
 
@@ -393,38 +527,38 @@
         <div class="info-grid">
             <div class="info-item">
                 <label>Interpurchase Time 12M (PL/BL)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_12m_plbl) if tl_features.interpurchase_time_12m_plbl is not none else "N/A" }}</div>
+                <div class="value">1.76</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 6M (PL/BL)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_6m_plbl) if tl_features.interpurchase_time_6m_plbl is not none else "N/A" }}</div>
+                <div class="value">0.00</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 24M (All)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_all) if tl_features.interpurchase_time_24m_all is not none else "N/A" }}</div>
+                <div class="value">0.71</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 9M (HL/LAP)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_9m_hl_lap) if tl_features.interpurchase_time_9m_hl_lap is not none else "N/A" }}</div>
+                <div class="value">N/A</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 24M (HL/LAP)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_hl_lap) if tl_features.interpurchase_time_24m_hl_lap is not none else "N/A" }}</div>
+                <div class="value">N/A</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 24M (TWL)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_twl) if tl_features.interpurchase_time_24m_twl is not none else "N/A" }}</div>
+                <div class="value">N/A</div>
             </div>
             <div class="info-item">
                 <label>Interpurchase Time 12M (Consumer Loan)</label>
-                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_12m_cl) if tl_features.interpurchase_time_12m_cl is not none else "N/A" }}</div>
+                <div class="value">1.67</div>
             </div>
         </div>
     </div>
-    {% endif %}
+    
 
     <div class="footer">
-        <p>Generated on {{ report.meta.generated_at[:10] }} | Currency: {{ report.meta.currency }}</p>
+        <p>Generated on 2026-02-14 | Currency: INR</p>
     </div>
 </body>
 </html>

@@ -128,6 +128,34 @@ SECURED_LOAN_TYPES: Set[str] = {
     "Business Loan Against Bank Deposits",
 }
 
+# Human-readable display names for report rendering
+LOAN_TYPE_DISPLAY_NAMES: Dict[str, str] = {
+    "personal_loan": "Personal Loan",
+    "credit_card": "Credit Card",
+    "home_loan": "Home Loan",
+    "auto_loan": "Auto Loan",
+    "business_loan": "Business Loan",
+    "lap_las_lad": "LAP / LAS / LAD",
+    "gold_loan": "Gold Loan",
+    "two_wheeler_loan": "Two Wheeler Loan",
+    "consumer_durable": "Consumer Durable",
+    "other": "Other",
+}
+
+
+def get_loan_type_display_name(loan_type) -> str:
+    """Get human-readable display name for a LoanType.
+
+    Args:
+        loan_type: LoanType enum or its string value.
+
+    Returns:
+        Human-readable name like 'Personal Loan'.
+    """
+    value = loan_type.value if isinstance(loan_type, LoanType) else str(loan_type)
+    return LOAN_TYPE_DISPLAY_NAMES.get(value, value.replace("_", " ").title())
+
+
 # Kotak sectors that count as "on-us" tradelines
 ON_US_SECTORS: Set[str] = {"KOTAK BANK", "KOTAK PRIME"}
 
