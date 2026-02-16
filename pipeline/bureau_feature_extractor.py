@@ -7,7 +7,6 @@ All logic is deterministic — no LLM, no formatting.
 """
 
 import csv
-import os
 import re
 from collections import defaultdict
 from datetime import datetime, date
@@ -20,6 +19,7 @@ from schemas.loan_type import (
     ON_US_SECTORS,
 )
 from features.bureau_features import BureauLoanFeatureVector
+from config.settings import BUREAU_DPD_FILE, BUREAU_DPD_DELIMITER
 
 # Module-level cache for bureau CSV
 _bureau_df: Optional[List[dict]] = None
@@ -34,19 +34,12 @@ _KNOWN_FORCED_EVENTS = {"WRF", "SET", "SMA", "SUB", "DBT", "LSS", "WOF"}
 _ALPHA_PATTERN = re.compile(r"[A-Z]{3}")
 
 
-def _get_dpd_data_path() -> str:
-    """Get the path to dpd_data.csv relative to the project root."""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(project_root, "dpd_data.csv")
-
-
 def _load_bureau_data(force_reload: bool = False) -> List[dict]:
-    """Load and cache dpd_data.csv (tab-separated)."""
+    """Load and cache bureau DPD data."""
     global _bureau_df
     if _bureau_df is None or force_reload:
-        data_path = _get_dpd_data_path()
-        with open(data_path, "r") as f:
-            reader = csv.DictReader(f, delimiter="\t")
+        with open(BUREAU_DPD_FILE, "r") as f:
+            reader = csv.DictReader(f, delimiter=BUREAU_DPD_DELIMITER)
             _bureau_df = list(reader)
     return _bureau_df
 

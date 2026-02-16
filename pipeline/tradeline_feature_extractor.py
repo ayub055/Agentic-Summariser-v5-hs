@@ -7,10 +7,10 @@ All logic is deterministic — no LLM, no formatting.
 """
 
 import csv
-import os
 from typing import List, Optional
 
 from features.tradeline_features import TradelineFeatures
+from config.settings import TL_FEATURES_FILE, TL_FEATURES_DELIMITER
 
 # Module-level cache for tl_features CSV
 _tl_features_df: Optional[List[dict]] = None
@@ -51,19 +51,12 @@ _INT_FIELDS = {
 }
 
 
-def _get_tl_features_path() -> str:
-    """Get the path to tl_features.csv relative to the project root."""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(project_root, "tl_features.csv")
-
-
 def _load_tl_features(force_reload: bool = False) -> List[dict]:
-    """Load and cache tl_features.csv (tab-separated)."""
+    """Load and cache tradeline features data."""
     global _tl_features_df
     if _tl_features_df is None or force_reload:
-        data_path = _get_tl_features_path()
-        with open(data_path, "r") as f:
-            reader = csv.DictReader(f, delimiter="\t")
+        with open(TL_FEATURES_FILE, "r") as f:
+            reader = csv.DictReader(f, delimiter=TL_FEATURES_DELIMITER)
             _tl_features_df = list(reader)
     return _tl_features_df
 

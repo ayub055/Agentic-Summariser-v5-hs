@@ -1,5 +1,9 @@
 """Configuration settings for the system."""
 
+import os
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # =============================================================================
 # MODEL CONFIGURATION
 # =============================================================================
@@ -13,11 +17,21 @@ PARSER_MODEL = "mistral"
 EXPLAINER_MODEL = "llama3.2"
 
 # =============================================================================
-# DATA PATHS
+# DATA PATHS — Change these when switching to new data files
 # =============================================================================
 
-DATA_DIR = "data"
-TRANSACTIONS_FILE = f"{DATA_DIR}/sample_transactions.csv"
+# Transaction data
+TRANSACTIONS_FILE = os.path.join(_PROJECT_ROOT, "data", "rgs.csv")
+TRANSACTIONS_DELIMITER = ","
+
+# Bureau DPD tradeline data
+BUREAU_DPD_FILE = os.path.join(_PROJECT_ROOT, "dpd_data.csv")
+BUREAU_DPD_DELIMITER = "\t"
+
+# Pre-computed tradeline features
+TL_FEATURES_FILE = os.path.join(_PROJECT_ROOT, "tl_features.csv")
+TL_FEATURES_DELIMITER = "\t"
+
 LOG_DIR = "logs"
 
 # =============================================================================

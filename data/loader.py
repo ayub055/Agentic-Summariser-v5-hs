@@ -5,19 +5,11 @@ Handles all data access in one place.
 
 import pandas as pd
 from typing import Optional
-import os
+
+from config.settings import TRANSACTIONS_FILE, TRANSACTIONS_DELIMITER
 
 # Module-level cache for the dataframe
 _transactions_df: Optional[pd.DataFrame] = None
-
-
-def get_data_path() -> str:
-    """Get the path to the transactions CSV file."""
-    # Get the directory where this file is located
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Navigate to the data folder (../../data from archive_refactored/data/)
-    data_path = os.path.join(current_dir,  "rgs.csv")
-    return os.path.normpath(data_path)
 
 
 def load_transactions(force_reload: bool = False) -> pd.DataFrame:
@@ -33,9 +25,8 @@ def load_transactions(force_reload: bool = False) -> pd.DataFrame:
     global _transactions_df
 
     if _transactions_df is None or force_reload:
-        data_path = get_data_path()
-        _transactions_df = pd.read_csv(data_path)
-        print(f"Loaded {len(_transactions_df)} transactions from {data_path}")
+        _transactions_df = pd.read_csv(TRANSACTIONS_FILE, sep=TRANSACTIONS_DELIMITER)
+        print(f"Loaded {len(_transactions_df)} transactions from {TRANSACTIONS_FILE}")
 
     return _transactions_df
 
