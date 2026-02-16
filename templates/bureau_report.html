@@ -278,7 +278,7 @@
                     <td class="amount">{{ vec.total_sanctioned_amount|inr }}</td>
                     <td class="amount">{{ vec.total_outstanding_amount|inr }}</td>
                     <td class="center">{{ vec.max_dpd if vec.max_dpd is not none else "-" }}</td>
-                    <td class="center">{{ "{:.0f}".format(vec.utilization_ratio) if vec.utilization_ratio is not none else "-" }}</td>
+                    <td class="center">{{ "{:.0f}".format(vec.utilization_ratio * 100) if vec.utilization_ratio is not none else "-" }}</td>
                     <td class="center">{{ vec.on_us_count }}</td>
                     <td class="center">{{ vec.off_us_count }}</td>
                 </tr>

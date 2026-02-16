@@ -137,7 +137,7 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
     pdf.set_font("Helvetica", "", 7)
     for loan_type, vec in report.feature_vectors.items():
         secured = "Y" if vec.secured else "N"
-        util = f"{vec.utilization_ratio:.0f}" if vec.utilization_ratio is not None else "-"
+        util = f"{vec.utilization_ratio * 100:.0f}" if vec.utilization_ratio is not None else "-"
         max_dpd = str(vec.max_dpd) if vec.max_dpd is not None else "-"
 
         values = [

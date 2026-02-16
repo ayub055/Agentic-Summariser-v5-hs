@@ -159,9 +159,9 @@ def _loan_type_findings(
     for loan_type, vec in vectors.items():
         lt_name = get_loan_type_display_name(loan_type)
 
-        # CC utilization
+        # CC utilization (utilization_ratio is stored as 0-1; convert to %)
         if loan_type == LoanType.CC and vec.utilization_ratio is not None:
-            util = vec.utilization_ratio
+            util = vec.utilization_ratio * 100
             if util > 75:
                 findings.append(KeyFinding(
                     category="Utilization",
@@ -340,28 +340,7 @@ def _tradeline_findings(tf: TradelineFeatures) -> List[KeyFinding]:
             ))
 
     # --- Utilization ---
-    if tf.cc_balance_utilization_pct is not None:
-        if tf.cc_balance_utilization_pct > 75:
-            findings.append(KeyFinding(
-                category="Utilization",
-                finding=f"CC balance utilization: {tf.cc_balance_utilization_pct:.1f}%",
-                inference="Over-utilized credit card limits indicate high revolving credit dependency",
-                severity="high_risk",
-            ))
-        elif tf.cc_balance_utilization_pct > 50:
-            findings.append(KeyFinding(
-                category="Utilization",
-                finding=f"CC balance utilization: {tf.cc_balance_utilization_pct:.1f}%",
-                inference="Elevated CC utilization; approaching over-utilization threshold",
-                severity="moderate_risk",
-            ))
-        elif tf.cc_balance_utilization_pct <= 30:
-            findings.append(KeyFinding(
-                category="Utilization",
-                finding=f"CC balance utilization: {tf.cc_balance_utilization_pct:.1f}%",
-                inference="Healthy CC utilization reflects controlled credit card usage",
-                severity="positive",
-            ))
+    # CC utilization is already covered by _loan_type_findings (from feature vectors)
 
     if tf.pl_balance_remaining_pct is not None:
         if tf.pl_balance_remaining_pct > 80:
