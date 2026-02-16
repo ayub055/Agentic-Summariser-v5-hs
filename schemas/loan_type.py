@@ -46,10 +46,12 @@ LOAN_TYPE_NORMALIZATION_MAP: Dict[str, LoanType] = {
 
     # Home / housing loans
     "Housing Loan": LoanType.HL,
+    "Home Loan": LoanType.HL,
     "Pradhan Mantri Awas Yojana - Credit Link Subsidy Scheme MAY CLSS": LoanType.HL,
 
     # Auto / vehicle loans
     "Auto Loan (Personal)": LoanType.AL,
+    "Auto Loan": LoanType.AL,
     "Used Car Loan": LoanType.AL,
 
     ## COMMERCIAL VEHICLE LOAN CATEGORY
@@ -125,8 +127,10 @@ SECURED_LOAN_TYPES: Set[str] = {
     "Leasing",
     "P2P Auto Loan",
     "Housing Loan",
+    "Home Loan",
     "Property Loan",
     "Auto Loan (Personal)",
+    "Auto Loan",
     "Used Car Loan",
     "Commercial Vehicle Loan",
     "Construction Equipment Loan",
@@ -148,6 +152,7 @@ LOAN_TYPE_DISPLAY_NAMES: Dict[str, str] = {
     "gold_loan": "Gold Loan",
     "two_wheeler_loan": "Two Wheeler Loan",
     "consumer_durable": "Consumer Durable",
+    "commercial_vehichle_loan": "Commercial Vehicle Loan",
     "other": "Other",
 }
 

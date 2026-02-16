@@ -167,7 +167,7 @@ def _build_feature_vector(
     """Build a single feature vector for a group of tradelines of the same loan type."""
     loan_count = len(tradelines)
     # Secured if any tradeline in this group has a secured raw loan type
-    secured = any(is_secured(tl.get("loan_type", "")) for tl in tradelines)
+    secured = any(is_secured(tl.get("loan_type_new", "")) for tl in tradelines)
 
     total_sanctioned = sum(_safe_float(tl.get("sanction_amount", "")) for tl in tradelines)
     total_outstanding = sum(_safe_float(tl.get("out_standing_balance", "")) for tl in tradelines)
@@ -249,7 +249,7 @@ def extract_bureau_features(customer_id: int) -> Dict[LoanType, BureauLoanFeatur
     # Group by canonical loan type
     grouped: Dict[LoanType, List[dict]] = defaultdict(list)
     for row in customer_rows:
-        raw_type = row.get("loan_type", "").strip()
+        raw_type = row.get("loan_type_new", "").strip()
         canonical = normalize_loan_type(raw_type)
         grouped[canonical].append(row)
 
