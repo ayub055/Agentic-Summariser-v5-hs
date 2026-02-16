@@ -14,10 +14,13 @@ class LoanType(str, Enum):
     HL = "home_loan"
     AL = "auto_loan"
     BL = "business_loan"
-    LAP = "lap_las_lad"
+    LAP = "lap"
+    LAS = "las"
+    LAD = "lad"
     GL = "gold_loan"
     TWL = "two_wheeler_loan"
     CD = "consumer_durable"
+    CMVL = "commercial_vehichle_loan"
     OTHER = "other"
 
 
@@ -28,28 +31,32 @@ LOAN_TYPE_NORMALIZATION_MAP: Dict[str, LoanType] = {
     "Short Term Personal Loan": LoanType.PL,
     "Microfinance - Personal Loan": LoanType.PL,
     "P2P Personal Loan": LoanType.PL,
-    "Loan to Professional": LoanType.PL,
+
+    ### AS IT IS
+    "Loan to Professional": LoanType.PL, # -- CHANGE TO AS IT IS
+    "Loan on Credit Card": LoanType.CC,
+    "Microfinance - Housing Loan": LoanType.HL,
 
     # Credit cards
     "Credit Card": LoanType.CC,
     "Secured Credit Card": LoanType.CC,
     "Corporate Credit Card": LoanType.CC,
-    "Loan on Credit Card": LoanType.CC,
     "Fleet Card": LoanType.CC,
     "Kisan Credit Card": LoanType.CC,
 
     # Home / housing loans
     "Housing Loan": LoanType.HL,
-    "Microfinance - Housing Loan": LoanType.HL,
     "Pradhan Mantri Awas Yojana - Credit Link Subsidy Scheme MAY CLSS": LoanType.HL,
 
     # Auto / vehicle loans
     "Auto Loan (Personal)": LoanType.AL,
     "Used Car Loan": LoanType.AL,
-    "Commercial Vehicle Loan": LoanType.AL,
-    "Construction Equipment Loan": LoanType.AL,
-    "Tractor Loan": LoanType.AL,
-    "P2P Auto Loan": LoanType.AL,
+
+    ## COMMERCIAL VEHICLE LOAN CATEGORY
+    "Commercial Vehicle Loan": LoanType.CMVL,
+    "Construction Equipment Loan": LoanType.CMVL,
+    "Tractor Loan": LoanType.CMVL,
+    "P2P Auto Loan": LoanType.CMVL,
 
     # Business loans
     "Business Loan - General": LoanType.BL,
@@ -65,16 +72,12 @@ LOAN_TYPE_NORMALIZATION_MAP: Dict[str, LoanType] = {
     "Business Non-Funded Credit Facility - Priority Sector - Small Business": LoanType.BL,
     "Business Loan - General": LoanType.BL,
     "Business Loan - Unsecured": LoanType.BL,
-    "Non-Funded Credit Facility": LoanType.BL,
-    "Microfinance - Business Loan": LoanType.BL,
-    "Mudra Loans - Shishu / Kishor / Tarun": LoanType.BL,
-    "GECL Loan Secured": LoanType.BL,
-    "GECL Loan Unsecured": LoanType.BL,
+
 
     # Loan against property / securities / deposits
-    "Loan_against_securities": LoanType.LAP,
-    "Loan Against Shares/Securities": LoanType.LAP,
-    "Loan Against Bank Deposits": LoanType.LAP,
+    "Loan_against_securities": LoanType.LAS,
+    "Loan Against Shares/Securities": LoanType.LAS,
+    "Loan Against Bank Deposits": LoanType.LAD,
     "Property Loan": LoanType.LAP,
 
     # Gold loans
@@ -87,17 +90,20 @@ LOAN_TYPE_NORMALIZATION_MAP: Dict[str, LoanType] = {
     # Consumer durables
     "Consumer Loan": LoanType.CD,
 
-    # Education
+    # Education & others
     "Education Loan": LoanType.OTHER,
     "P2P Education Loan": LoanType.OTHER,
-
-    # Other
     "Seller Financing": LoanType.OTHER,
     "Temporary Overdraft": LoanType.OTHER,
     "Overdraft": LoanType.OTHER,
     "Prime Minister Jaan Dhan Yojana - Overdraft": LoanType.OTHER,
     "Leasing": LoanType.OTHER,
     "Microfinance - Other": LoanType.OTHER,
+    "Non-Funded Credit Facility": LoanType.OTHER,
+    "Microfinance - Business Loan": LoanType.OTHER,
+    "Mudra Loans - Shishu / Kishor / Tarun": LoanType.OTHER,
+    "GECL Loan Secured": LoanType.OTHER,
+    "GECL Loan Unsecured": LoanType.OTHER,
     "Other": LoanType.OTHER,
 }
 
@@ -128,6 +134,7 @@ SECURED_LOAN_TYPES: Set[str] = {
     "Business Loan Against Bank Deposits",
 }
 
+
 # Human-readable display names for report rendering
 LOAN_TYPE_DISPLAY_NAMES: Dict[str, str] = {
     "personal_loan": "Personal Loan",
@@ -135,7 +142,9 @@ LOAN_TYPE_DISPLAY_NAMES: Dict[str, str] = {
     "home_loan": "Home Loan",
     "auto_loan": "Auto Loan",
     "business_loan": "Business Loan",
-    "lap_las_lad": "LAP / LAS / LAD",
+    "lap": "LAP",
+    "las": "LAS",
+    "lad": "LAD",
     "gold_loan": "Gold Loan",
     "two_wheeler_loan": "Two Wheeler Loan",
     "consumer_durable": "Consumer Durable",
