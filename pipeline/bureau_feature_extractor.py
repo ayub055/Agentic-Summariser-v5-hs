@@ -93,28 +93,31 @@ def _compute_months_since_last_payment(tradelines: List[dict]) -> Optional[int]:
 
 
 def _compute_max_dpd(tradelines: List[dict]) -> tuple:
-    """Compute maximum DPD across all tradelines and all 36 monthly flags.
+    """Find maximum DPD across all tradelines using pre-computed CSV columns.
+
+    Reads `max_dpd` and `months_since_max_dpd` columns from dpd_data.csv
+    (pre-computed per tradeline) and returns the portfolio max.
 
     Returns:
         (max_dpd, months_ago) — max_dpd is None if no DPD found,
-        months_ago is the dpdf column index (1=most recent month, 36=oldest).
+        months_ago is months since that max DPD occurred.
     """
-    max_val = 0
-    max_months_ago = None
+    best_val = 0
+    best_months_ago = None
     found_any = False
 
     for tl in tradelines:
-        for i, col in enumerate(_DPD_COLUMNS, start=1):
-            val = _safe_int(tl.get(col, ""), default=0)
-            if val > 0:
-                found_any = True
-                if val > max_val:
-                    max_val = val
-                    max_months_ago = i
+        val = _safe_int(tl.get("max_dpd", ""), default=0)
+        if val > 0:
+            found_any = True
+            if val > best_val:
+                best_val = val
+                raw_months = tl.get("months_since_max_dpd", "")
+                best_months_ago = _safe_int(raw_months) if raw_months and raw_months.strip().upper() not in ("NULL", "") else None
 
     if not found_any:
         return None, None
-    return max_val, max_months_ago
+    return best_val, best_months_ago
 
 
 def _extract_forced_event_flags(tradelines: List[dict]) -> List[str]:
