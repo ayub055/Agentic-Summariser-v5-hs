@@ -28,9 +28,10 @@ class BureauLoanFeatureVector:
 
     delinquency_flag: bool
     max_dpd: Optional[int]
-    overdue_amount: float
+    max_dpd_months_ago: Optional[int] = None
+    overdue_amount: float = 0.0
 
-    utilization_ratio: Optional[float]  # CC only
+    utilization_ratio: Optional[float] = None  # CC only
 
     forced_event_flags: List[str] = field(default_factory=list)
     on_us_count: int = 0

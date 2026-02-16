@@ -95,12 +95,26 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
     pdf.section_title("Portfolio Summary")
     ei = report.executive_inputs
     pdf.key_value("Live Tradelines", str(ei.live_tradelines))
-    pdf.key_value("Closed Tradelines", str(ei.closed_tradelines))
-    pdf.key_value("Total Exposure", f"INR {format_inr(ei.total_exposure)}")
+    pdf.key_value("Total Sanction Amount", f"INR {format_inr(ei.total_sanctioned)}")
     pdf.key_value("Total Outstanding", f"INR {format_inr(ei.total_outstanding)}")
-    pdf.key_value("Unsecured Exposure", f"INR {format_inr(ei.unsecured_exposure)}")
-    pdf.key_value("Delinquency", "Yes" if ei.has_delinquency else "No")
-    pdf.key_value("Max DPD", str(ei.max_dpd) if ei.max_dpd is not None else "N/A")
+    pdf.key_value("Unsecured Sanction Amount", f"INR {format_inr(ei.unsecured_sanctioned)}")
+    # Unsecured outstanding as % of total outstanding
+    if ei.total_outstanding > 0:
+        unsec_os_pct = ei.unsecured_outstanding / ei.total_outstanding * 100
+        pdf.key_value("Unsecured Outstanding", f"{unsec_os_pct:.0f}% of total outstanding")
+    else:
+        pdf.key_value("Unsecured Outstanding", "N/A")
+    # Max DPD with timing
+    dpd_str = str(ei.max_dpd) if ei.max_dpd is not None else "N/A"
+    if ei.max_dpd is not None:
+        details = []
+        if ei.max_dpd_months_ago is not None:
+            details.append(f"{ei.max_dpd_months_ago} months ago")
+        if ei.max_dpd_loan_type:
+            details.append(ei.max_dpd_loan_type)
+        if details:
+            dpd_str += f" ({', '.join(details)})"
+    pdf.key_value("Max DPD", dpd_str)
     pdf.ln(5)
 
     # Narrative (LLM-generated executive summary)
@@ -124,9 +138,9 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
     headers = [
         "Type", "Sec", "Count", "Live", "Closed",
         "Sanctioned", "Outstanding", "Max DPD", "Util%",
-        "On-Us", "Off-Us"
+        "On-Us"
     ]
-    widths = [28, 12, 16, 14, 16, 28, 28, 18, 14, 16, 16]
+    widths = [30, 12, 16, 14, 16, 30, 30, 18, 14, 16]
 
     pdf.set_font("Helvetica", "B", 7)
     pdf.set_fill_color(220, 220, 220)
@@ -151,7 +165,6 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
             max_dpd,
             util,
             str(vec.on_us_count),
-            str(vec.off_us_count),
         ]
 
         for val, width in zip(values, widths):
@@ -167,10 +180,10 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         str(ei.total_tradelines),
         str(ei.live_tradelines),
         str(ei.closed_tradelines),
-        format_inr(ei.total_exposure),
+        format_inr(ei.total_sanctioned),
         format_inr(ei.total_outstanding),
         str(ei.max_dpd) if ei.max_dpd is not None else "-",
-        "", "", ""
+        "", ""
     ]
     for val, width in zip(totals, widths):
         pdf.cell(width, 6, val, border=1, align="C")
@@ -187,7 +200,6 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         _render_feature_pair(pdf, "Months Since Last PL Trade Opened", tf.months_since_last_trade_pl)
         _render_feature_pair(pdf, "Months Since Last Unsecured Trade Opened", tf.months_since_last_trade_uns)
         _render_feature_pair(pdf, "New PL Trades in Last 6 Months", tf.new_trades_6m_pl)
-        _render_feature_pair(pdf, "Total Trades (All Types)", tf.total_trades)
         pdf.ln(3)
 
         # DPD & Delinquency
@@ -205,7 +217,8 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         _render_feature_pair(pdf, "% Trades with 0+ DPD in 24M (PL)", tf.pct_0plus_24m_pl)
         _render_feature_pair(pdf, "% Missed Payments Last 18M", tf.pct_missed_payments_18m)
         _render_feature_pair(pdf, "% Trades with 0+ DPD in 12M (All)", tf.pct_trades_0plus_12m)
-        _render_feature_pair(pdf, "Ratio Good Closed Loans (PL)", tf.ratio_good_closed_pl)
+        _render_feature_pair(pdf, "Ratio Good Closed Loans (PL) %",
+                            tf.ratio_good_closed_pl * 100 if tf.ratio_good_closed_pl is not None else None)
         pdf.ln(3)
 
         # Utilization

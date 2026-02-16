@@ -454,9 +454,7 @@ def _format_tradeline_features_for_prompt(tf) -> str:
     if v is not None:
         tag = _annotate_value(v, [("<", 2, " [CONCERN — very recent unsecured activity]")])
         lines.append(f"    Months Since Last Unsecured Trade: {_fmt(v)}{tag}")
-    v = _val("total_trades")
-    if v is not None:
-        lines.append(f"    Total Trades (All Types): {v}")
+    # total_trades omitted — already shown in Portfolio Summary from executive inputs
 
     # --- DPD & Delinquency ---
     lines.append("  DPD & DELINQUENCY:")
@@ -486,9 +484,23 @@ def _format_tradeline_features_for_prompt(tf) -> str:
     lines.append("  PAYMENT BEHAVIOR:")
     v = _val("pct_missed_payments_18m")
     if v is not None:
-        tag = _annotate_value(v, [(">", 10, " [HIGH RISK — frequent missed payments]"),
-                                   (">", 0, " [CONCERN — some missed payments]"),
-                                   ("==", 0, " [POSITIVE — no missed payments]")])
+        if v > 10:
+            tag = " [HIGH RISK — frequent missed payments]"
+        elif v > 0:
+            tag = " [CONCERN — some missed payments]"
+        elif v == 0:
+            # Check if DPD values are non-zero — if so, 0% missed payments
+            # is misleading and should not be tagged as POSITIVE
+            has_dpd = any(
+                _val(f) is not None and _val(f) > 0
+                for f in ["max_dpd_6m_cc", "max_dpd_6m_pl", "max_dpd_9m_cc"]
+            )
+            if has_dpd:
+                tag = " [NOTE — 0% formally missed but DPD delays detected on some products; payments were late]"
+            else:
+                tag = " [POSITIVE — no missed payments]"
+        else:
+            tag = ""
         lines.append(f"    % Missed Payments Last 18M: {_fmt(v)}{tag}")
     v = _val("pct_0plus_24m_all")
     if v is not None:
@@ -510,7 +522,7 @@ def _format_tradeline_features_for_prompt(tf) -> str:
         tag = _annotate_value(v, [(">=", 0.8, " [POSITIVE — strong closure track record]"),
                                    ("<", 0.5, " [HIGH RISK — poor closure history]"),
                                    ("<", 0.7, " [CONCERN — below average closure quality]")])
-        lines.append(f"    Ratio Good Closed PL Loans: {_fmt(v)}{tag}")
+        lines.append(f"    Ratio Good Closed PL Loans: {v * 100:.0f}%{tag}")
 
     # --- Utilization ---
     lines.append("  UTILIZATION:")
@@ -611,6 +623,22 @@ def _compute_interaction_signals(tf_dict: dict) -> list:
             msg += f", {good_ratio:.0%} good PL closure ratio"
         signals.append(msg)
 
+    # Missed payments = 0 but DPD detected — apparent contradiction
+    if missed_clean and not all_dpd_clean:
+        dpd_details = []
+        if dpd_6m_cc is not None and dpd_6m_cc > 0:
+            dpd_details.append(f"CC 6M: {dpd_6m_cc} days")
+        if dpd_6m_pl is not None and dpd_6m_pl > 0:
+            dpd_details.append(f"PL 6M: {dpd_6m_pl} days")
+        if dpd_9m_cc is not None and dpd_9m_cc > 0:
+            dpd_details.append(f"CC 9M: {dpd_9m_cc} days")
+        if dpd_details:
+            signals.append(
+                "PAYMENT TIMING NUANCE: 0% missed payments in 18M but DPD detected ({}) — "
+                "payments were eventually made but past due date; do NOT describe payment "
+                "record as clean or positive".format(", ".join(dpd_details))
+            )
+
     # High utilization + high outstanding
     cc_util = tf_dict.get("cc_balance_utilization_pct")
     pl_bal = tf_dict.get("pl_balance_remaining_pct")
@@ -641,15 +669,33 @@ def _build_bureau_data_summary(executive_inputs, tradeline_features=None) -> str
     data = asdict(executive_inputs) if not isinstance(executive_inputs, dict) else executive_inputs
     product_breakdown = data.pop("product_breakdown", {})
 
+    # Max DPD with timing info
+    max_dpd = data.get('max_dpd', 'N/A')
+    max_dpd_str = str(max_dpd) if max_dpd is not None else "N/A"
+    dpd_months = data.get('max_dpd_months_ago')
+    dpd_lt = data.get('max_dpd_loan_type')
+    if max_dpd is not None and max_dpd != 'N/A':
+        details = []
+        if dpd_months is not None:
+            details.append(f"{dpd_months} months ago")
+        if dpd_lt:
+            details.append(dpd_lt)
+        if details:
+            max_dpd_str += f" ({', '.join(details)})"
+
+    # Unsecured outstanding as % of total outstanding
+    total_os = data.get('total_outstanding', 0)
+    unsec_os = data.get('unsecured_outstanding', 0)
+    unsec_os_pct = f"{(unsec_os / total_os * 100):.0f}%" if total_os > 0 else "N/A"
+
     lines = [
         f"Total Tradelines: {data.get('total_tradelines', 0)}",
         f"Live Tradelines: {data.get('live_tradelines', 0)}",
-        f"Closed Tradelines: {data.get('closed_tradelines', 0)}",
-        f"Total Exposure (Sanctioned): INR {format_inr(data.get('total_exposure', 0))}",
+        f"Total Sanction Amount: INR {format_inr(data.get('total_sanctioned', 0))}",
         f"Total Outstanding: INR {format_inr(data.get('total_outstanding', 0))}",
-        f"Unsecured Exposure: INR {format_inr(data.get('unsecured_exposure', 0))}",
-        f"Delinquency Flag: {'Yes' if data.get('has_delinquency') else 'No'}",
-        f"Max DPD (Days Past Due): {data.get('max_dpd', 'N/A')}",
+        f"Unsecured Sanction Amount: INR {format_inr(data.get('unsecured_sanctioned', 0))}",
+        f"Unsecured Outstanding: {unsec_os_pct} of total outstanding",
+        f"Max DPD (Days Past Due): {max_dpd_str}",
     ]
 
     # Add CC utilization if available in product breakdown

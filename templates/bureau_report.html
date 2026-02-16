@@ -185,31 +185,38 @@
                 <div class="value">{{ report.executive_inputs.live_tradelines }}</div>
             </div>
             <div class="info-item">
-                <label>Closed Tradelines</label>
-                <div class="value">{{ report.executive_inputs.closed_tradelines }}</div>
-            </div>
-            <div class="info-item">
-                <label>Total Exposure</label>
-                <div class="value">INR {{ report.executive_inputs.total_exposure|inr }}</div>
+                <label>Total Sanction Amount</label>
+                <div class="value">INR {{ report.executive_inputs.total_sanctioned|inr }}</div>
             </div>
             <div class="info-item">
                 <label>Total Outstanding</label>
                 <div class="value">INR {{ report.executive_inputs.total_outstanding|inr }}</div>
             </div>
             <div class="info-item">
-                <label>Unsecured Exposure</label>
-                <div class="value">INR {{ report.executive_inputs.unsecured_exposure|inr }}</div>
+                <label>Unsecured Sanction Amount</label>
+                <div class="value">INR {{ report.executive_inputs.unsecured_sanctioned|inr }}</div>
             </div>
             <div class="info-item">
-                <label>Delinquency</label>
-                <div class="value {% if report.executive_inputs.has_delinquency %}risk{% else %}safe{% endif %}">
-                    {{ "Yes" if report.executive_inputs.has_delinquency else "No" }}
+                <label>Unsecured Outstanding</label>
+                <div class="value">
+                    {% if report.executive_inputs.total_outstanding > 0 %}
+                        {{ "%.0f"|format(report.executive_inputs.unsecured_outstanding / report.executive_inputs.total_outstanding * 100) }}% of total outstanding
+                    {% else %}
+                        N/A
+                    {% endif %}
                 </div>
             </div>
             <div class="info-item">
                 <label>Max DPD</label>
                 <div class="value {% if report.executive_inputs.max_dpd and report.executive_inputs.max_dpd > 30 %}risk{% endif %}">
-                    {{ report.executive_inputs.max_dpd if report.executive_inputs.max_dpd is not none else "N/A" }}
+                    {% if report.executive_inputs.max_dpd is not none %}
+                        {{ report.executive_inputs.max_dpd }}
+                        {% if report.executive_inputs.max_dpd_months_ago is not none or report.executive_inputs.max_dpd_loan_type %}
+                            <span style="font-size: 12px; color: #666;">({% if report.executive_inputs.max_dpd_months_ago is not none %}{{ report.executive_inputs.max_dpd_months_ago }} months ago{% endif %}{% if report.executive_inputs.max_dpd_months_ago is not none and report.executive_inputs.max_dpd_loan_type %}, {% endif %}{% if report.executive_inputs.max_dpd_loan_type %}{{ report.executive_inputs.max_dpd_loan_type }}{% endif %})</span>
+                        {% endif %}
+                    {% else %}
+                        N/A
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -262,7 +269,6 @@
                     <th class="center">Max DPD</th>
                     <th class="center">Util %</th>
                     <th class="center">On-Us</th>
-                    <th class="center">Off-Us</th>
                 </tr>
             </thead>
             <tbody>
@@ -280,7 +286,6 @@
                     <td class="center">{{ vec.max_dpd if vec.max_dpd is not none else "-" }}</td>
                     <td class="center">{{ "{:.0f}".format(vec.utilization_ratio * 100) if vec.utilization_ratio is not none else "-" }}</td>
                     <td class="center">{{ vec.on_us_count }}</td>
-                    <td class="center">{{ vec.off_us_count }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -307,10 +312,6 @@
             <div class="info-item">
                 <label>New PL Trades (6M)</label>
                 <div class="value">{{ tl_features.new_trades_6m_pl if tl_features.new_trades_6m_pl is not none else "N/A" }}</div>
-            </div>
-            <div class="info-item">
-                <label>Total Trades (All)</label>
-                <div class="value">{{ tl_features.total_trades if tl_features.total_trades is not none else "N/A" }}</div>
             </div>
         </div>
 
@@ -373,7 +374,7 @@
             <div class="info-item">
                 <label>Ratio Good Closed Loans (PL)</label>
                 <div class="value {% if tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl >= 0.8 %}safe{% elif tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl < 0.5 %}risk{% endif %}">
-                    {{ "%.2f"|format(tl_features.ratio_good_closed_pl) if tl_features.ratio_good_closed_pl is not none else "N/A" }}
+                    {{ "%.0f%%"|format(tl_features.ratio_good_closed_pl * 100) if tl_features.ratio_good_closed_pl is not none else "N/A" }}
                 </div>
             </div>
         </div>

@@ -117,4 +117,24 @@ def extract_tradeline_features(customer_id: int) -> Optional[TradelineFeatures]:
         else:
             kwargs[field_name] = _safe_optional_float(raw_value)
 
+    # --- Cross-field consistency fixes ---
+    # PL is unsecured: if unsecured 0+ DPD is N/A but PL has a value, use PL
+    if kwargs.get("months_since_last_0p_uns") is None and kwargs.get("months_since_last_0p_pl") is not None:
+        kwargs["months_since_last_0p_uns"] = kwargs["months_since_last_0p_pl"]
+
+    # 9M CC window includes 6M: if 6M has DPD but 9M is None, use 6M value
+    dpd_6m_cc = kwargs.get("max_dpd_6m_cc")
+    dpd_9m_cc = kwargs.get("max_dpd_9m_cc")
+    if dpd_6m_cc is not None and dpd_9m_cc is not None:
+        if dpd_9m_cc < dpd_6m_cc:
+            kwargs["max_dpd_9m_cc"] = dpd_6m_cc
+    elif dpd_6m_cc is not None and dpd_9m_cc is None:
+        kwargs["max_dpd_9m_cc"] = dpd_6m_cc
+
+    # Subset validation: PL is subset of All — pct_0plus_24m_pl cannot exceed pct_0plus_24m_all
+    pct_all = kwargs.get("pct_0plus_24m_all")
+    pct_pl = kwargs.get("pct_0plus_24m_pl")
+    if pct_all is not None and pct_pl is not None and pct_pl > pct_all:
+        kwargs["pct_0plus_24m_all"] = pct_pl
+
     return TradelineFeatures(**kwargs)

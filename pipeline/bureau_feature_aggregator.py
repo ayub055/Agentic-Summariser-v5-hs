@@ -8,7 +8,7 @@ the LLM narration layer will see.
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from schemas.loan_type import LoanType
+from schemas.loan_type import LoanType, get_loan_type_display_name
 from features.bureau_features import BureauLoanFeatureVector
 
 
@@ -20,12 +20,15 @@ class BureauExecutiveSummaryInputs:
 
     product_breakdown: Dict[LoanType, BureauLoanFeatureVector] = field(default_factory=dict)
 
-    total_exposure: float = 0.0
+    total_sanctioned: float = 0.0
     total_outstanding: float = 0.0
-    unsecured_exposure: float = 0.0
+    unsecured_sanctioned: float = 0.0
+    unsecured_outstanding: float = 0.0
 
     has_delinquency: bool = False
     max_dpd: Optional[int] = None
+    max_dpd_months_ago: Optional[int] = None
+    max_dpd_loan_type: Optional[str] = None
 
 
 def aggregate_bureau_features(
@@ -42,41 +45,50 @@ def aggregate_bureau_features(
     total_tradelines = 0
     live_tradelines = 0
     closed_tradelines = 0
-    total_exposure = 0.0
+    total_sanctioned = 0.0
     total_outstanding = 0.0
-    unsecured_exposure = 0.0
+    unsecured_sanctioned = 0.0
+    unsecured_outstanding = 0.0
     has_delinquency = False
     portfolio_max_dpd: Optional[int] = None
+    portfolio_max_dpd_months_ago: Optional[int] = None
+    portfolio_max_dpd_loan_type: Optional[str] = None
 
     for loan_type, vec in vectors.items():
         total_tradelines += vec.loan_count
         live_tradelines += vec.live_count
         closed_tradelines += vec.closed_count
 
-        total_exposure += vec.total_sanctioned_amount
+        total_sanctioned += vec.total_sanctioned_amount
         total_outstanding += vec.total_outstanding_amount
 
-        # Unsecured exposure = sanctioned amount for non-secured loan types
+        # Unsecured = non-secured loan types
         if not vec.secured:
-            unsecured_exposure += vec.total_sanctioned_amount
+            unsecured_sanctioned += vec.total_sanctioned_amount
+            unsecured_outstanding += vec.total_outstanding_amount
 
         # Delinquency across portfolio
         if vec.delinquency_flag:
             has_delinquency = True
 
-        # Max DPD across portfolio
+        # Max DPD across portfolio — track which loan type and when
         if vec.max_dpd is not None:
             if portfolio_max_dpd is None or vec.max_dpd > portfolio_max_dpd:
                 portfolio_max_dpd = vec.max_dpd
+                portfolio_max_dpd_months_ago = vec.max_dpd_months_ago
+                portfolio_max_dpd_loan_type = get_loan_type_display_name(loan_type)
 
     return BureauExecutiveSummaryInputs(
         total_tradelines=total_tradelines,
         live_tradelines=live_tradelines,
         closed_tradelines=closed_tradelines,
         product_breakdown=dict(vectors),
-        total_exposure=total_exposure,
+        total_sanctioned=total_sanctioned,
         total_outstanding=total_outstanding,
-        unsecured_exposure=unsecured_exposure,
+        unsecured_sanctioned=unsecured_sanctioned,
+        unsecured_outstanding=unsecured_outstanding,
         has_delinquency=has_delinquency,
         max_dpd=portfolio_max_dpd,
+        max_dpd_months_ago=portfolio_max_dpd_months_ago,
+        max_dpd_loan_type=portfolio_max_dpd_loan_type,
     )

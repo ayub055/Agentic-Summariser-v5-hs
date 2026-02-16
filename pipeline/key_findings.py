@@ -107,31 +107,31 @@ def _portfolio_findings(
             severity="positive",
         ))
 
-    # Unsecured exposure proportion
-    if ei.total_exposure > 0:
-        unsecured_pct = (ei.unsecured_exposure / ei.total_exposure) * 100
+    # Unsecured sanction proportion
+    if ei.total_sanctioned > 0:
+        unsecured_pct = (ei.unsecured_sanctioned / ei.total_sanctioned) * 100
         if unsecured_pct > 80:
             findings.append(KeyFinding(
                 category="Portfolio",
-                finding=f"Unsecured exposure is {unsecured_pct:.0f}% of total (INR {format_inr(ei.unsecured_exposure)} of INR {format_inr(ei.total_exposure)})",
+                finding=f"Unsecured sanction is {unsecured_pct:.0f}% of total (INR {format_inr(ei.unsecured_sanctioned)} of INR {format_inr(ei.total_sanctioned)})",
                 inference="Heavily skewed towards unsecured lending; higher risk in absence of collateral",
                 severity="moderate_risk",
             ))
         elif unsecured_pct > 50:
             findings.append(KeyFinding(
                 category="Portfolio",
-                finding=f"Unsecured exposure is {unsecured_pct:.0f}% of total (INR {format_inr(ei.unsecured_exposure)} of INR {format_inr(ei.total_exposure)})",
+                finding=f"Unsecured sanction is {unsecured_pct:.0f}% of total (INR {format_inr(ei.unsecured_sanctioned)} of INR {format_inr(ei.total_sanctioned)})",
                 inference="Majority unsecured portfolio; monitor for over-leveraging on unsecured products",
                 severity="concern",
             ))
 
     # Outstanding as % of sanctioned
-    if ei.total_exposure > 0:
-        outstanding_pct = (ei.total_outstanding / ei.total_exposure) * 100
+    if ei.total_sanctioned > 0:
+        outstanding_pct = (ei.total_outstanding / ei.total_sanctioned) * 100
         if outstanding_pct > 80:
             findings.append(KeyFinding(
                 category="Portfolio",
-                finding=f"Outstanding balance is {outstanding_pct:.0f}% of total sanctioned exposure",
+                finding=f"Outstanding balance is {outstanding_pct:.0f}% of total sanctioned amount",
                 inference="Most sanctioned amount still outstanding; limited repayment progress on existing obligations",
                 severity="concern",
             ))
@@ -309,12 +309,25 @@ def _tradeline_findings(tf: TradelineFeatures) -> List[KeyFinding]:
                 severity="concern",
             ))
         else:
-            findings.append(KeyFinding(
-                category="Payment Behavior",
-                finding="No missed payments in last 18 months",
-                inference="Perfect payment track record over 18 months is a strong positive",
-                severity="positive",
-            ))
+            # 0% missed payments — but cross-check against DPD fields
+            has_dpd = any(
+                getattr(tf, f, None) is not None and getattr(tf, f) > 0
+                for f in ["max_dpd_6m_cc", "max_dpd_6m_pl", "max_dpd_9m_cc"]
+            )
+            if has_dpd:
+                findings.append(KeyFinding(
+                    category="Payment Behavior",
+                    finding="No formal missed payments in last 18 months, but DPD delays detected on some products",
+                    inference="Payments were eventually made but past due date; payment timing discipline is not fully clean",
+                    severity="concern",
+                ))
+            else:
+                findings.append(KeyFinding(
+                    category="Payment Behavior",
+                    finding="No missed payments in last 18 months",
+                    inference="Perfect payment track record over 18 months is a strong positive",
+                    severity="positive",
+                ))
 
     if tf.ratio_good_closed_pl is not None:
         if tf.ratio_good_closed_pl >= 0.8:
@@ -489,6 +502,27 @@ def _composite_findings(
             inference="Exemplary repayment profile — strong candidate from a credit discipline standpoint",
             severity="positive",
         ))
+
+    # Missed payments = 0 but DPD detected (from tl_features or portfolio-level)
+    has_tf_dpd = not dpd_clean
+    has_portfolio_dpd = ei.has_delinquency and ei.max_dpd is not None and ei.max_dpd > 0
+    if missed_clean and (has_tf_dpd or has_portfolio_dpd):
+        dpd_details = []
+        if tf.max_dpd_6m_cc is not None and tf.max_dpd_6m_cc > 0:
+            dpd_details.append(f"CC 6M: {tf.max_dpd_6m_cc} days")
+        if tf.max_dpd_6m_pl is not None and tf.max_dpd_6m_pl > 0:
+            dpd_details.append(f"PL 6M: {tf.max_dpd_6m_pl} days")
+        if tf.max_dpd_9m_cc is not None and tf.max_dpd_9m_cc > 0:
+            dpd_details.append(f"CC 9M: {tf.max_dpd_9m_cc} days")
+        if has_portfolio_dpd and not dpd_details:
+            dpd_details.append(f"Portfolio Max DPD: {ei.max_dpd} days")
+        if dpd_details:
+            findings.append(KeyFinding(
+                category="Composite Signal",
+                finding=f"No formal missed payments but DPD detected ({', '.join(dpd_details)})",
+                inference="Payments were made but with delays past due date; payment discipline is inconsistent despite no formal defaults",
+                severity="concern",
+            ))
 
     return findings
 

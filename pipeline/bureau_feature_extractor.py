@@ -92,19 +92,29 @@ def _compute_months_since_last_payment(tradelines: List[dict]) -> Optional[int]:
     return max(0, delta)
 
 
-def _compute_max_dpd(tradelines: List[dict]) -> Optional[int]:
-    """Compute maximum DPD across all tradelines and all 36 monthly flags."""
+def _compute_max_dpd(tradelines: List[dict]) -> tuple:
+    """Compute maximum DPD across all tradelines and all 36 monthly flags.
+
+    Returns:
+        (max_dpd, months_ago) — max_dpd is None if no DPD found,
+        months_ago is the dpdf column index (1=most recent month, 36=oldest).
+    """
     max_val = 0
+    max_months_ago = None
     found_any = False
 
     for tl in tradelines:
-        for col in _DPD_COLUMNS:
+        for i, col in enumerate(_DPD_COLUMNS, start=1):
             val = _safe_int(tl.get(col, ""), default=0)
             if val > 0:
                 found_any = True
-                max_val = max(max_val, val)
+                if val > max_val:
+                    max_val = val
+                    max_months_ago = i
 
-    return max_val if found_any else None
+    if not found_any:
+        return None, None
+    return max_val, max_months_ago
 
 
 def _extract_forced_event_flags(tradelines: List[dict]) -> List[str]:
@@ -167,12 +177,13 @@ def _build_feature_vector(
     valid_vintages = [v for v in vintages if v > 0]
     avg_vintage = round(sum(valid_vintages) / len(valid_vintages), 1) if valid_vintages else 0.0
 
-    # Live / Closed counts
-    live_count = sum(1 for tl in tradelines if tl.get("loan_status", "").strip() == "Live")
+    # Live / Closed counts — ensure live + closed = total for consistency
+    # Anything not explicitly "Closed" is treated as live (includes Live, Written-Off, etc.)
     closed_count = sum(1 for tl in tradelines if tl.get("loan_status", "").strip() == "Closed")
+    live_count = loan_count - closed_count
 
     # DPD and delinquency
-    max_dpd = _compute_max_dpd(tradelines)
+    max_dpd, max_dpd_months_ago = _compute_max_dpd(tradelines)
     delinquency_flag = max_dpd is not None and max_dpd > 0
 
     # Overdue
@@ -203,6 +214,7 @@ def _build_feature_vector(
         closed_count=closed_count,
         delinquency_flag=delinquency_flag,
         max_dpd=max_dpd,
+        max_dpd_months_ago=max_dpd_months_ago,
         overdue_amount=overdue_amount,
         utilization_ratio=utilization_ratio,
         forced_event_flags=forced_event_flags,
