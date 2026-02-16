@@ -225,6 +225,26 @@
     </div>
     {% endif %}
 
+    <!-- Key Findings & Inferences -->
+    {% if key_findings %}
+    <div class="section">
+        <h3>Key Findings & Inferences</h3>
+        <div style="margin-top: 10px;">
+            {% for finding in key_findings %}
+            <div style="display: flex; align-items: flex-start; margin-bottom: 10px; padding: 10px; border-left: 4px solid {% if finding.severity == 'high_risk' %}#e74c3c{% elif finding.severity == 'moderate_risk' %}#e67e22{% elif finding.severity == 'concern' %}#f39c12{% elif finding.severity == 'positive' %}#27ae60{% else %}#95a5a6{% endif %}; background-color: #f8f9fa; border-radius: 0 4px 4px 0;">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: #666;">{{ finding.category }}</span>
+                    </div>
+                    <div style="font-weight: 600; color: #2c3e50; font-size: 13px;">{{ finding.finding }}</div>
+                    <div style="color: #555; font-size: 12px; margin-top: 3px; font-style: italic;">{{ finding.inference }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Product-wise Breakdown Table -->
     {% if vectors_data %}
     <div class="section">

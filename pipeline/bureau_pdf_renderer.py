@@ -16,6 +16,7 @@ from fpdf import FPDF
 from schemas.bureau_report import BureauReport
 from schemas.loan_type import get_loan_type_display_name
 from pipeline.pdf_renderer import ReportPDF, _sanitize_text
+from pipeline.key_findings import KeyFinding, findings_to_dicts
 from utils.helpers import mask_customer_id, format_inr
 
 
@@ -26,6 +27,33 @@ class BureauReportPDF(ReportPDF):
         self.set_font("Helvetica", "B", 16)
         self.cell(0, 10, "Bureau Tradeline Report", align="C", new_x="LMARGIN", new_y="NEXT")
         self.ln(5)
+
+
+_SEVERITY_LABELS = {
+    "high_risk": "HIGH RISK",
+    "moderate_risk": "MODERATE",
+    "concern": "CONCERN",
+    "positive": "POSITIVE",
+    "neutral": "NEUTRAL",
+}
+
+
+def _render_key_finding(pdf, finding: KeyFinding):
+    """Render a single key finding bullet in the PDF."""
+    # Category label
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.cell(0, 5, finding.category, new_x="LMARGIN", new_y="NEXT")
+
+    # Finding (bold bullet)
+    pdf.set_x(15)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.multi_cell(0, 5, _sanitize_text(f"  {finding.finding}"))
+
+    # Inference (italic)
+    pdf.set_x(15)
+    pdf.set_font("Helvetica", "I", 7)
+    pdf.multi_cell(0, 4, _sanitize_text(f"  -> {finding.inference}"))
+    pdf.ln(2)
 
 
 def _render_group_header(pdf, title: str):
@@ -81,7 +109,15 @@ def _build_bureau_pdf(report: BureauReport) -> FPDF:
         pdf.section_text(report.narrative)
         pdf.ln(3)
 
-    # -- Page 2: Product-wise Table --
+    # Key Findings & Inferences
+    if report.key_findings:
+        pdf.add_page()
+        pdf.section_title("Key Findings & Inferences")
+        pdf.ln(2)
+        for finding in report.key_findings:
+            _render_key_finding(pdf, finding)
+
+    # -- Product-wise Table --
     pdf.add_page()
     pdf.section_title("Product-wise Breakdown")
 
@@ -262,9 +298,13 @@ def render_bureau_report_html(report: BureauReport) -> str:
     if report.tradeline_features is not None:
         tl_features_data = asdict(report.tradeline_features)
 
+    # Prepare key findings for template
+    key_findings_data = findings_to_dicts(report.key_findings) if report.key_findings else []
+
     template = env.get_template("bureau_report.html")
     return template.render(
         report=report,
         vectors_data=vectors_data,
         tl_features=tl_features_data,
+        key_findings=key_findings_data,
     )

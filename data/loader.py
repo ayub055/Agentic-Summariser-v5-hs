@@ -16,7 +16,7 @@ def get_data_path() -> str:
     # Get the directory where this file is located
     current_dir = os.path.dirname(os.path.abspath(__file__))
     # Navigate to the data folder (../../data from archive_refactored/data/)
-    data_path = os.path.join(current_dir,  "ayub_txns.csv")
+    data_path = os.path.join(current_dir,  "rgs.csv")
     return os.path.normpath(data_path)
 
 

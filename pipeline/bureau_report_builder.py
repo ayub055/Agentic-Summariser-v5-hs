@@ -12,6 +12,7 @@ from schemas.bureau_report import BureauReport
 from pipeline.bureau_feature_extractor import extract_bureau_features
 from pipeline.bureau_feature_aggregator import aggregate_bureau_features
 from pipeline.tradeline_feature_extractor import extract_tradeline_features
+from pipeline.key_findings import extract_key_findings
 
 logger = logging.getLogger(__name__)
 
@@ -84,15 +85,25 @@ def build_bureau_report(customer_id: int) -> BureauReport:
         transaction_count=executive_inputs.total_tradelines,
     )
 
-    # 4. Assemble report
+    # 4. Key findings (deterministic, fail-soft)
+    key_findings = []
+    try:
+        key_findings = extract_key_findings(
+            executive_inputs, feature_vectors, tradeline_features
+        )
+    except Exception as e:
+        logger.warning(f"Key findings extraction failed for {customer_id}: {e}")
+
+    # 5. Assemble report
     report = BureauReport(
         meta=meta,
         feature_vectors=feature_vectors,
         executive_inputs=executive_inputs,
         tradeline_features=tradeline_features,
+        key_findings=key_findings,
     )
 
-    # 5. Validate (fail-soft: log warnings, return partial report)
+    # 6. Validate (fail-soft: log warnings, return partial report)
     warnings = _validate_report(report)
     for w in warnings:
         logger.warning(f"Bureau report validation [{customer_id}]: {w}")

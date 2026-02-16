@@ -5,7 +5,7 @@ the report generation pipeline. Feature vectors are retained for auditability.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from schemas.loan_type import LoanType
 from features.bureau_features import BureauLoanFeatureVector
@@ -23,3 +23,4 @@ class BureauReport:
     ))
     tradeline_features: Optional[TradelineFeatures] = None
     narrative: Optional[str] = None
+    key_findings: List = field(default_factory=list)
