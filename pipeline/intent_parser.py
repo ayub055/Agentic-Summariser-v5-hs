@@ -202,7 +202,7 @@ def calculate_confidence(parsed: dict, query: str) -> float:
 
 class IntentParser:
     def __init__(self, model_name: str = PARSER_MODEL):
-        self.llm = ChatOllama(model=model_name, temperature=0, format="json")
+        self.llm = ChatOllama(model=model_name, temperature=0, format="json", seed=42)
 
     def parse(self, query: str) -> ParsedIntent:
         prompt = PARSER_PROMPT.format(query=query)

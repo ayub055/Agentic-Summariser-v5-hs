@@ -94,7 +94,7 @@ class ReportPlanner:
     """
 
     def __init__(self, model_name: str = PARSER_MODEL):
-        self.llm = ChatOllama(model=model_name, temperature=0, format="json")
+        self.llm = ChatOllama(model=model_name, temperature=0, format="json", seed=42)
         self.prompt = ChatPromptTemplate.from_template(REPORT_PLANNER_PROMPT)
 
     def plan(self, customer_id: int, data_profile: dict) -> ReportPlan:

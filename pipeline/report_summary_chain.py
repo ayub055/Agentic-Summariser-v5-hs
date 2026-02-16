@@ -65,7 +65,7 @@ def create_summary_chain(model_name: str = SUMMARY_MODEL):
         LCEL chain that takes {customer_id, data_summary} and returns str
     """
     prompt = ChatPromptTemplate.from_template(REVIEW_PROMPT_ORIGINAL)
-    llm = ChatOllama(model=model_name, temperature=0)
+    llm = ChatOllama(model=model_name, temperature=0, seed=42)
 
     return prompt | llm | StrOutputParser()
 
@@ -221,7 +221,7 @@ Write a 4-5 line customer persona description:"""
 def create_persona_chain(model_name: str = SUMMARY_MODEL):
     """Create an LCEL chain for generating customer persona."""
     prompt = ChatPromptTemplate.from_template(PERSONA_PROMPT_ORIGINAL)
-    llm = ChatOllama(model=model_name, temperature=0.1)
+    llm = ChatOllama(model=model_name, temperature=0.1, seed=42)
     return prompt | llm | StrOutputParser()
 
 
@@ -751,7 +751,7 @@ def generate_bureau_review(
 
     try:
         prompt = ChatPromptTemplate.from_template(BUREAU_REVIEW_PROMPT)
-        llm = ChatOllama(model=model_name, temperature=0)
+        llm = ChatOllama(model=model_name, temperature=0, seed=42)
         chain = prompt | llm | StrOutputParser()
 
         review = chain.invoke({"data_summary": data_summary})

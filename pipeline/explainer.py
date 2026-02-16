@@ -31,7 +31,7 @@ class ResponseExplainer:
             stream_delay: Delay in seconds between streaming chunks (0.0 = no delay)
                          Use 0.02-0.05 for readable typing effect
         """
-        self.llm = ChatOllama(model=model_name, temperature=0)
+        self.llm = ChatOllama(model=model_name, temperature=0, seed=42)
         self.stream_delay = stream_delay
 
     def explain(

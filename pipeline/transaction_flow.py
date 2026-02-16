@@ -47,7 +47,7 @@ class TransactionInsightExtractor:
     """Extracts transaction patterns using LLM."""
 
     def __init__(self, model_name: str = "mistral"):
-        self.llm = ChatOllama(model=model_name, temperature=0, format="json")
+        self.llm = ChatOllama(model=model_name, temperature=0, format="json", seed=42)
 
     def extract(
         self,
