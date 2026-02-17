@@ -50,9 +50,11 @@ def _generate_combined_report_with_pdf(customer_id: int, **kwargs) -> Dict[str, 
     Wraps the combined report tool to return data suitable for the pipeline.
     """
     customer_report, bureau_report, pdf_path = _gen_combined_pdf(customer_id)
-    result = customer_report.model_dump()
+    result = customer_report.model_dump() if customer_report else {}
     result['pdf_path'] = pdf_path
     result['report_type'] = 'combined'
+    result['banking_available'] = customer_report is not None
+    result['bureau_available'] = bureau_report is not None
     return result
 
 

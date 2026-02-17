@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Combined Report - {{ customer_report.meta.customer_id|mask_id }}</title>
+    <title>Combined Report - {% if customer_report %}{{ customer_report.meta.customer_id|mask_id }}{% elif bureau_report %}{{ bureau_report.meta.customer_id|mask_id }}{% endif %}</title>
     <style>
         * {
             margin: 0;
@@ -69,6 +69,15 @@
             margin: 0;
             color: #444;
             white-space: pre-line;
+        }
+
+        .absence-note {
+            background-color: #fdf2f2;
+            border-left: 4px solid #e74c3c;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #b44;
+            font-style: italic;
         }
 
         table {
@@ -196,6 +205,7 @@
     <div class="header">
         <h1>Combined Financial & Bureau Report</h1>
         <div class="header-meta">
+            {% if customer_report %}
             <span><strong>Customer ID:</strong> {{ customer_report.meta.customer_id|mask_id }}</span>
             {% if customer_report.meta.prty_name %}
             <span><strong>Name:</strong> {{ customer_report.meta.prty_name }}</span>
@@ -203,7 +213,13 @@
             <span><strong>Generated:</strong> {{ customer_report.meta.generated_at[:10] }}</span>
             <span><strong>Period:</strong> {{ customer_report.meta.analysis_period }}</span>
             <span><strong>Transactions:</strong> {{ customer_report.meta.transaction_count }}</span>
+            {% elif bureau_report %}
+            <span><strong>Customer ID:</strong> {{ bureau_report.meta.customer_id|mask_id }}</span>
+            <span><strong>Generated:</strong> {{ bureau_report.meta.generated_at[:10] }}</span>
+            {% endif %}
+            {% if bureau_report %}
             <span><strong>Tradelines:</strong> {{ bureau_report.executive_inputs.total_tradelines }}</span>
+            {% endif %}
         </div>
     </div>
 
@@ -223,6 +239,17 @@
     {# ================================================================== #}
     {# PART 1: BANKING / TRANSACTION REPORT                               #}
     {# ================================================================== #}
+
+    {% if customer_report %}
+
+    {% if customer_report.customer_persona %}
+    <div class="section">
+        <h3>Customer Profile</h3>
+        <div class="summary-box">
+            <p>{{ customer_report.customer_persona }}</p>
+        </div>
+    </div>
+    {% endif %}
 
     {% if customer_report.customer_review %}
     <div class="section">
@@ -396,6 +423,16 @@
     </div>
     {% endif %}
 
+    {% else %}
+    {# Banking data not available #}
+    <div class="section">
+        <h3>Banking / Transaction Report</h3>
+        <div class="absence-note">
+            Banking transaction data is not available for this customer.
+        </div>
+    </div>
+    {% endif %}
+
     {# ================================================================== #}
     {# DIVIDER                                                             #}
     {# ================================================================== #}
@@ -405,6 +442,8 @@
     {# ================================================================== #}
     {# PART 2: BUREAU REPORT                                               #}
     {# ================================================================== #}
+
+    {% if bureau_report %}
 
     <!-- Portfolio Summary -->
     <div class="section">
@@ -668,8 +707,21 @@
     </div>
     {% endif %}
 
+    {% else %}
+    {# Bureau data not available #}
+    <div class="section">
+        <div class="absence-note">
+            Bureau tradeline data is not available for this customer.
+        </div>
+    </div>
+    {% endif %}
+
     <div class="footer">
+        {% if customer_report %}
         <p>Generated on {{ customer_report.meta.generated_at[:10] }} | Currency: {{ customer_report.meta.currency }}</p>
+        {% elif bureau_report %}
+        <p>Generated on {{ bureau_report.meta.generated_at[:10] }}</p>
+        {% endif %}
     </div>
 </body>
 </html>

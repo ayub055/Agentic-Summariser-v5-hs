@@ -113,11 +113,11 @@ class QueryPlanner:
                 IntentType.BUREAU_OVERVIEW,
             }
             if intent.intent == IntentType.COMBINED_REPORT:
-                # Combined report needs customer in both banking and bureau
-                if intent.customer_id not in self.valid_customers:
-                    return f"Customer {intent.customer_id} not found in banking data. Valid customers: {sorted(self.valid_customers)[:10]}"
-                if intent.customer_id not in self.valid_bureau_customers:
-                    return f"Customer {intent.customer_id} not found in bureau data. Valid CRNs: {sorted(self.valid_bureau_customers)[:10]}"
+                # Combined report needs customer in at least one data source
+                in_banking = intent.customer_id in self.valid_customers
+                in_bureau = intent.customer_id in self.valid_bureau_customers
+                if not in_banking and not in_bureau:
+                    return f"Customer {intent.customer_id} not found in banking or bureau data."
             elif intent.intent in bureau_intents:
                 if intent.customer_id not in self.valid_bureau_customers:
                     return f"Customer {intent.customer_id} not found in bureau data. Valid CRNs: {sorted(self.valid_bureau_customers)[:10]}"
