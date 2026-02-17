@@ -11,6 +11,7 @@ from tools.bureau_chat import (
 )
 from pipeline.report_orchestrator import generate_customer_report_pdf
 from tools.bureau import generate_bureau_report_pdf
+from tools.combined_report import generate_combined_report_pdf as _gen_combined_pdf
 
 
 def _generate_customer_report_with_pdf(customer_id: int, **kwargs) -> Dict[str, Any]:
@@ -42,6 +43,19 @@ def _generate_bureau_report_with_pdf(customer_id: int, **kwargs) -> Dict[str, An
     return result
 
 
+def _generate_combined_report_with_pdf(customer_id: int, **kwargs) -> Dict[str, Any]:
+    """
+    Generate combined (banking + bureau) report with PDF output.
+
+    Wraps the combined report tool to return data suitable for the pipeline.
+    """
+    customer_report, bureau_report, pdf_path = _gen_combined_pdf(customer_id)
+    result = customer_report.model_dump()
+    result['pdf_path'] = pdf_path
+    result['report_type'] = 'combined'
+    return result
+
+
 class ToolExecutor:
     def __init__(self):
         self.tool_map = {
@@ -67,6 +81,9 @@ class ToolExecutor:
 
             # Bureau report
             "generate_bureau_report": _generate_bureau_report_with_pdf,
+
+            # Combined report (banking + bureau)
+            "generate_combined_report": _generate_combined_report_with_pdf,
 
             # Bureau chat tools
             "bureau_credit_card_info": bureau_credit_card_info,

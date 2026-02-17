@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Report - {{ customer_report.meta.customer_id|mask_id }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .header {
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .header-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        .header-meta span {
+            display: inline-block;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .section h3 {
+            color: #2c3e50;
+            font-size: 16px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .summary-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-box p {
+            margin: 0;
+            color: #444;
+            white-space: pre-line;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+
+        th, td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .amount {
+            text-align: right;
+            font-family: 'Consolas', monospace;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .positive {
+            color: #27ae60;
+        }
+
+        .negative {
+            color: #e74c3c;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        .info-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .info-item {
+            padding: 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-item .value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .info-item .value.risk {
+            color: #e74c3c;
+        }
+
+        .info-item .value.safe {
+            color: #27ae60;
+        }
+
+        .secured-yes {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .secured-no {
+            color: #e67e22;
+            font-weight: 600;
+        }
+
+        .section-divider {
+            margin: 40px 0;
+            padding: 12px 20px;
+            background-color: #2c3e50;
+            color: #fff;
+            font-size: 18px;
+            font-weight: 600;
+            border-radius: 4px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #999;
+            font-size: 11px;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+            .section {
+                page-break-inside: avoid;
+            }
+            .section-divider {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Combined Financial & Bureau Report</h1>
+        <div class="header-meta">
+            <span><strong>Customer ID:</strong> {{ customer_report.meta.customer_id|mask_id }}</span>
+            {% if customer_report.meta.prty_name %}
+            <span><strong>Name:</strong> {{ customer_report.meta.prty_name }}</span>
+            {% endif %}
+            <span><strong>Generated:</strong> {{ customer_report.meta.generated_at[:10] }}</span>
+            <span><strong>Period:</strong> {{ customer_report.meta.analysis_period }}</span>
+            <span><strong>Transactions:</strong> {{ customer_report.meta.transaction_count }}</span>
+            <span><strong>Tradelines:</strong> {{ bureau_report.executive_inputs.total_tradelines }}</span>
+        </div>
+    </div>
+
+    {# ================================================================== #}
+    {# PART 1: BANKING / TRANSACTION REPORT                               #}
+    {# ================================================================== #}
+
+    {% if customer_report.customer_review %}
+    <div class="section">
+        <h3>Executive Summary</h3>
+        <div class="summary-box">
+            <p>{{ customer_report.customer_review }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if customer_report.salary %}
+    <div class="section">
+        <h3>Salary Information</h3>
+        <div class="info-grid-2">
+            <div class="info-item">
+                <label>Average Amount</label>
+                <div class="value">{{ "{:,.2f}".format(customer_report.salary.avg_amount) }} {{ customer_report.meta.currency }}</div>
+            </div>
+            <div class="info-item">
+                <label>Transactions</label>
+                <div class="value">{{ customer_report.salary.frequency }}</div>
+            </div>
+        </div>
+        {% if customer_report.salary.narration %}
+        <p style="margin-top: 10px; color: #666; font-size: 12px;">
+            <strong>Sample:</strong> {{ customer_report.salary.narration[:80] }}{% if customer_report.salary.narration|length > 80 %}...{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if customer_report.category_overview %}
+    <div class="section">
+        <h3>Spending by Category</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th class="amount">Amount ({{ customer_report.meta.currency }})</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cat, amount in customer_report.category_overview.items()|sort(attribute='1', reverse=true) %}
+                <tr>
+                    <td>{{ cat }}</td>
+                    <td class="amount">{{ "{:,.2f}".format(amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if customer_report.monthly_cashflow %}
+    <div class="section">
+        <h3>Monthly Cash Flow</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th class="amount">Inflow</th>
+                    <th class="amount">Outflow</th>
+                    <th class="amount">Net</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in customer_report.monthly_cashflow %}
+                <tr>
+                    <td>{{ m.month }}</td>
+                    <td class="amount positive">{{ "{:,.0f}".format(m.inflow) }}</td>
+                    <td class="amount negative">{{ "{:,.0f}".format(m.outflow) }}</td>
+                    <td class="amount {% if m.net >= 0 %}positive{% else %}negative{% endif %}">
+                        {{ "{:,.0f}".format(m.net) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if customer_report.emis %}
+    <div class="section">
+        <h3>EMI Payments</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th class="amount">Average Amount</th>
+                    <th class="amount">Transactions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emi in customer_report.emis %}
+                <tr>
+                    <td>{{ emi.name }}</td>
+                    <td class="amount">{{ "{:,.2f}".format(emi.amount) }}</td>
+                    <td class="amount">{{ emi.frequency }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if customer_report.rent %}
+    <div class="section">
+        <h3>Rent Payments</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Direction</label>
+                <div class="value">{{ customer_report.rent.direction | capitalize }}</div>
+            </div>
+            <div class="info-item">
+                <label>Average Amount</label>
+                <div class="value">{{ "{:,.2f}".format(customer_report.rent.amount) }} {{ customer_report.meta.currency }}</div>
+            </div>
+            <div class="info-item">
+                <label>Transactions</label>
+                <div class="value">{{ customer_report.rent.frequency }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if customer_report.bills %}
+    <div class="section">
+        <h3>Utility Bills</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th class="amount">Average Amount</th>
+                    <th class="amount">Transactions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bill in customer_report.bills %}
+                <tr>
+                    <td>{{ bill.bill_type }}</td>
+                    <td class="amount">{{ "{:,.2f}".format(bill.avg_amount) }}</td>
+                    <td class="amount">{{ bill.frequency }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if customer_report.top_merchants %}
+    <div class="section">
+        <h3>Top Merchants</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Merchant</th>
+                    <th class="amount">Transactions</th>
+                    <th class="amount">Total ({{ customer_report.meta.currency }})</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in customer_report.top_merchants %}
+                <tr>
+                    <td>{{ m.name[:40] }}{% if m.name|length > 40 %}...{% endif %}</td>
+                    <td class="amount">{{ m.count }}</td>
+                    <td class="amount">{{ "{:,.0f}".format(m.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# ================================================================== #}
+    {# DIVIDER                                                             #}
+    {# ================================================================== #}
+
+    <div class="section-divider">Bureau Tradeline Analysis</div>
+
+    {# ================================================================== #}
+    {# PART 2: BUREAU REPORT                                               #}
+    {# ================================================================== #}
+
+    <!-- Portfolio Summary -->
+    <div class="section">
+        <h3>Portfolio Summary</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Live Tradelines</label>
+                <div class="value">{{ bureau_report.executive_inputs.live_tradelines }}</div>
+            </div>
+            <div class="info-item">
+                <label>Total Sanction Amount</label>
+                <div class="value">INR {{ bureau_report.executive_inputs.total_sanctioned|inr }}</div>
+            </div>
+            <div class="info-item">
+                <label>Total Outstanding</label>
+                <div class="value">INR {{ bureau_report.executive_inputs.total_outstanding|inr }}</div>
+            </div>
+            <div class="info-item">
+                <label>Unsecured Sanction Amount</label>
+                <div class="value">INR {{ bureau_report.executive_inputs.unsecured_sanctioned|inr }}</div>
+            </div>
+            <div class="info-item">
+                <label>Unsecured Outstanding</label>
+                <div class="value">
+                    {% if bureau_report.executive_inputs.total_outstanding > 0 %}
+                        {{ "%.0f"|format(bureau_report.executive_inputs.unsecured_outstanding / bureau_report.executive_inputs.total_outstanding * 100) }}% of total outstanding
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Max DPD</label>
+                <div class="value {% if bureau_report.executive_inputs.max_dpd and bureau_report.executive_inputs.max_dpd > 30 %}risk{% endif %}">
+                    {% if bureau_report.executive_inputs.max_dpd is not none %}
+                        {{ bureau_report.executive_inputs.max_dpd }}
+                        {% if bureau_report.executive_inputs.max_dpd_months_ago is not none or bureau_report.executive_inputs.max_dpd_loan_type %}
+                            <span style="font-size: 12px; color: #666;">({% if bureau_report.executive_inputs.max_dpd_months_ago is not none %}{{ bureau_report.executive_inputs.max_dpd_months_ago }} months ago{% endif %}{% if bureau_report.executive_inputs.max_dpd_months_ago is not none and bureau_report.executive_inputs.max_dpd_loan_type %}, {% endif %}{% if bureau_report.executive_inputs.max_dpd_loan_type %}{{ bureau_report.executive_inputs.max_dpd_loan_type }}{% endif %})</span>
+                        {% endif %}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bureau Executive Summary -->
+    {% if bureau_report.narrative %}
+    <div class="section">
+        <h3>Bureau Executive Summary</h3>
+        <div class="summary-box">
+            <p>{{ bureau_report.narrative }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Key Findings & Inferences -->
+    {% if key_findings %}
+    <div class="section">
+        <h3>Key Findings & Inferences</h3>
+        <div style="margin-top: 10px;">
+            {% for finding in key_findings %}
+            <div style="display: flex; align-items: flex-start; margin-bottom: 10px; padding: 10px; border-left: 4px solid {% if finding.severity == 'high_risk' %}#e74c3c{% elif finding.severity == 'moderate_risk' %}#e67e22{% elif finding.severity == 'concern' %}#f39c12{% elif finding.severity == 'positive' %}#27ae60{% else %}#95a5a6{% endif %}; background-color: #f8f9fa; border-radius: 0 4px 4px 0;">
+                <div style="flex: 1;">
+                    <div style="margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: #666;">{{ finding.category }}</span>
+                    </div>
+                    <div style="font-weight: 600; color: #2c3e50; font-size: 13px;">{{ finding.finding }}</div>
+                    <div style="color: #555; font-size: 12px; margin-top: 3px; font-style: italic;">{{ finding.inference }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Product-wise Breakdown -->
+    {% if vectors_data %}
+    <div class="section">
+        <h3>Product-wise Breakdown</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Loan Type</th>
+                    <th class="center">Secured</th>
+                    <th class="center">Count</th>
+                    <th class="center">Live</th>
+                    <th class="center">Closed</th>
+                    <th class="amount">Sanctioned</th>
+                    <th class="amount">Outstanding</th>
+                    <th class="center">Max DPD</th>
+                    <th class="center">Util %</th>
+                    <th class="center">On-Us</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vec in vectors_data %}
+                <tr>
+                    <td>{{ vec.loan_type_display }}</td>
+                    <td class="center {% if vec.secured %}secured-yes{% else %}secured-no{% endif %}">
+                        {{ "Yes" if vec.secured else "No" }}
+                    </td>
+                    <td class="center">{{ vec.loan_count }}</td>
+                    <td class="center">{{ vec.live_count }}</td>
+                    <td class="center">{{ vec.closed_count }}</td>
+                    <td class="amount">{{ vec.total_sanctioned_amount|inr }}</td>
+                    <td class="amount">{{ vec.total_outstanding_amount|inr }}</td>
+                    <td class="center">{{ vec.max_dpd if vec.max_dpd is not none else "-" }}</td>
+                    <td class="center">{{ "{:.0f}".format(vec.utilization_ratio * 100) if vec.utilization_ratio is not none else "-" }}</td>
+                    <td class="center">{{ vec.on_us_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Behavioral & Risk Features -->
+    {% if tl_features %}
+    <div class="section">
+        <h3>Behavioral & Risk Features</h3>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">Loan Activity</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Months Since Last PL Trade</label>
+                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_trade_pl) if tl_features.months_since_last_trade_pl is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Months Since Last Unsecured Trade</label>
+                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_trade_uns) if tl_features.months_since_last_trade_uns is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>New PL Trades (6M)</label>
+                <div class="value">{{ tl_features.new_trades_6m_pl if tl_features.new_trades_6m_pl is not none else "N/A" }}</div>
+            </div>
+        </div>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">DPD & Delinquency</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Max DPD 6M (CC)</label>
+                <div class="value {% if tl_features.max_dpd_6m_cc is not none and tl_features.max_dpd_6m_cc > 0 %}risk{% else %}safe{% endif %}">
+                    {{ tl_features.max_dpd_6m_cc if tl_features.max_dpd_6m_cc is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Max DPD 6M (PL)</label>
+                <div class="value {% if tl_features.max_dpd_6m_pl is not none and tl_features.max_dpd_6m_pl > 0 %}risk{% else %}safe{% endif %}">
+                    {{ tl_features.max_dpd_6m_pl if tl_features.max_dpd_6m_pl is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Max DPD 9M (CC)</label>
+                <div class="value {% if tl_features.max_dpd_9m_cc is not none and tl_features.max_dpd_9m_cc > 0 %}risk{% else %}safe{% endif %}">
+                    {{ tl_features.max_dpd_9m_cc if tl_features.max_dpd_9m_cc is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Months Since Last 0+ DPD (Unsecured)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_0p_uns) if tl_features.months_since_last_0p_uns is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Months Since Last 0+ DPD (PL)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.months_since_last_0p_pl) if tl_features.months_since_last_0p_pl is not none else "N/A" }}</div>
+            </div>
+        </div>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">Payment Behavior</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>% 0+ DPD in 24M (All)</label>
+                <div class="value {% if tl_features.pct_0plus_24m_all is not none and tl_features.pct_0plus_24m_all > 0 %}risk{% else %}safe{% endif %}">
+                    {{ "%.2f"|format(tl_features.pct_0plus_24m_all) if tl_features.pct_0plus_24m_all is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>% 0+ DPD in 24M (PL)</label>
+                <div class="value {% if tl_features.pct_0plus_24m_pl is not none and tl_features.pct_0plus_24m_pl > 0 %}risk{% else %}safe{% endif %}">
+                    {{ "%.2f"|format(tl_features.pct_0plus_24m_pl) if tl_features.pct_0plus_24m_pl is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>% Missed Payments (18M)</label>
+                <div class="value {% if tl_features.pct_missed_payments_18m is not none and tl_features.pct_missed_payments_18m > 0 %}risk{% else %}safe{% endif %}">
+                    {{ "%.2f"|format(tl_features.pct_missed_payments_18m) if tl_features.pct_missed_payments_18m is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>% Trades 0+ DPD in 12M (All)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.pct_trades_0plus_12m) if tl_features.pct_trades_0plus_12m is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Ratio Good Closed Loans (PL)</label>
+                <div class="value {% if tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl >= 0.8 %}safe{% elif tl_features.ratio_good_closed_pl is not none and tl_features.ratio_good_closed_pl < 0.5 %}risk{% endif %}">
+                    {{ "%.0f%%"|format(tl_features.ratio_good_closed_pl * 100) if tl_features.ratio_good_closed_pl is not none else "N/A" }}
+                </div>
+            </div>
+        </div>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">Utilization</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>CC Balance Utilization %</label>
+                <div class="value {% if tl_features.cc_balance_utilization_pct is not none and tl_features.cc_balance_utilization_pct > 75 %}risk{% elif tl_features.cc_balance_utilization_pct is not none and tl_features.cc_balance_utilization_pct <= 30 %}safe{% endif %}">
+                    {{ "%.2f"|format(tl_features.cc_balance_utilization_pct) if tl_features.cc_balance_utilization_pct is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>PL Balance Remaining %</label>
+                <div class="value">{{ "%.2f"|format(tl_features.pl_balance_remaining_pct) if tl_features.pl_balance_remaining_pct is not none else "N/A" }}</div>
+            </div>
+        </div>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">Enquiry Behavior</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Unsecured Enquiries (12M)</label>
+                <div class="value {% if tl_features.unsecured_enquiries_12m is not none and tl_features.unsecured_enquiries_12m > 10 %}risk{% elif tl_features.unsecured_enquiries_12m is not none and tl_features.unsecured_enquiries_12m <= 3 %}safe{% endif %}">
+                    {{ tl_features.unsecured_enquiries_12m if tl_features.unsecured_enquiries_12m is not none else "N/A" }}
+                </div>
+            </div>
+            <div class="info-item">
+                <label>Trade-to-Enquiry Ratio (Unsec 24M)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.trade_to_enquiry_ratio_uns_24m) if tl_features.trade_to_enquiry_ratio_uns_24m is not none else "N/A" }}</div>
+            </div>
+        </div>
+
+        <h4 style="color: #2c3e50; margin: 15px 0 8px 0; font-size: 14px;">Loan Acquisition Velocity</h4>
+        <div class="info-grid">
+            <div class="info-item">
+                <label>Interpurchase Time 12M (PL/BL)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_12m_plbl) if tl_features.interpurchase_time_12m_plbl is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 6M (PL/BL)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_6m_plbl) if tl_features.interpurchase_time_6m_plbl is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 24M (All)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_all) if tl_features.interpurchase_time_24m_all is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 9M (HL/LAP)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_9m_hl_lap) if tl_features.interpurchase_time_9m_hl_lap is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 24M (HL/LAP)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_hl_lap) if tl_features.interpurchase_time_24m_hl_lap is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 24M (TWL)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_24m_twl) if tl_features.interpurchase_time_24m_twl is not none else "N/A" }}</div>
+            </div>
+            <div class="info-item">
+                <label>Interpurchase Time 12M (Consumer Loan)</label>
+                <div class="value">{{ "%.2f"|format(tl_features.interpurchase_time_12m_cl) if tl_features.interpurchase_time_12m_cl is not none else "N/A" }}</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Generated on {{ customer_report.meta.generated_at[:10] }} | Currency: {{ customer_report.meta.currency }}</p>
+    </div>
+</body>
+</html>

@@ -39,6 +39,9 @@ INTENT_TOOL_MAP = {
     # Bureau report
     IntentType.BUREAU_REPORT: ["generate_bureau_report"],
 
+    # Combined report (banking + bureau)
+    IntentType.COMBINED_REPORT: ["generate_combined_report"],
+
     # Bureau chat (lightweight queries)
     IntentType.BUREAU_CREDIT_CARDS: ["bureau_credit_card_info"],
     IntentType.BUREAU_LOAN_COUNT: ["bureau_loan_type_info"],
@@ -79,6 +82,9 @@ REQUIRED_FIELDS = {
 
     # Bureau report
     IntentType.BUREAU_REPORT: ["customer_id"],
+
+    # Combined report
+    IntentType.COMBINED_REPORT: ["customer_id"],
 
     # Bureau chat (lightweight queries)
     IntentType.BUREAU_CREDIT_CARDS: ["customer_id"],

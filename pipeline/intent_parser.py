@@ -64,6 +64,7 @@ INTENTS (choose the most specific one):
 - income_stability: Income consistency and stability analysis
 - cash_flow: Monthly cash flow (inflows vs outflows)
 - category_presence_lookup: Check if customer has transactions for a specific category/behavior (e.g., betting, salary, rent, entertainment)
+- combined_report: Generate a combined report that merges both the customer banking report and the bureau tradeline report into one document
 - bureau_report: Generate a bureau/credit bureau/CIBIL tradeline report for a customer
 - bureau_credit_cards: Check if customer has credit cards, get count and utilization
 - bureau_loan_count: How many loans of a specific type (personal loan, home loan, etc.) the customer has. Put the loan type in "category" field.
@@ -90,6 +91,14 @@ Examples for category_presence_lookup:
 - "Does he receive salary?" -> intent=category_presence_lookup, category=salary
 - "Any entertainment expenses?" -> intent=category_presence_lookup, category=entertainment
 - "Is there gambling activity?" -> intent=category_presence_lookup, category=betting_gaming
+
+IMPORTANT for combined_report:
+If user asks to "generate combined report", "merged report", "both reports", or "combine banking and bureau" for a customer, classify as "combined_report".
+
+Examples for combined_report:
+- "Generate combined report for 100384958" -> intent=combined_report, customer_id=100384958
+- "Merged report for customer 100384958" -> intent=combined_report, customer_id=100384958
+- "Generate both reports for 100384958" -> intent=combined_report, customer_id=100384958
 
 IMPORTANT for bureau_report:
 If user asks to generate a "bureau report", "CIBIL report", "tradeline report", or "credit bureau report" for a customer, classify as "bureau_report".
@@ -327,6 +336,10 @@ class IntentParser:
             intent = IntentType.BUREAU_LOAN_COUNT
         elif any(kw in query_lower for kw in ["bureau summary", "bureau overview", "tradeline summary", "tradeline overview", "bureau detail", "what does the bureau"]):
             intent = IntentType.BUREAU_OVERVIEW
+
+        # Combined report (must check before individual report intents)
+        elif any(kw in query_lower for kw in ["combined report", "merged report", "both report", "complete combined", "merge report"]):
+            intent = IntentType.COMBINED_REPORT
 
         # Report intents (bureau report — full PDF generation)
         elif any(kw in query_lower for kw in ["bureau report", "cibil report", "tradeline report", "credit bureau"]):

@@ -21,6 +21,7 @@ from pipeline.executor import ToolExecutor
 from pipeline.explainer import ResponseExplainer
 from pipeline.report_orchestrator import generate_customer_report_pdf
 from tools.bureau import generate_bureau_report_pdf
+from tools.combined_report import generate_combined_report_pdf
 from pipeline.transaction_flow import get_transaction_insights_if_needed
 from schemas.intent import IntentType, ParsedIntent
 from utils.helpers import mask_customer_id
@@ -610,6 +611,26 @@ def generate_bureau_report(customer_id: int) -> tuple[bool, str | None]:
         return False, str(e)
 
 
+def generate_combined(customer_id: int) -> tuple[bool, str | None]:
+    """
+    Generate combined (banking + bureau) PDF report for a customer.
+
+    Returns:
+        Tuple of (success, pdf_path or error_message)
+    """
+    try:
+        _, _, pdf_path = generate_combined_report_pdf(customer_id=customer_id)
+
+        st.session_state.report_ready = True
+        st.session_state.report_path = pdf_path
+        st.session_state.report_customer = customer_id
+
+        return True, pdf_path
+
+    except Exception as e:
+        return False, str(e)
+
+
 def process_query(query: str):
     """Process a user query through the pipeline with stage indicators."""
     if not query.strip():
@@ -692,12 +713,18 @@ def process_query(query: str):
 
         # Check for report generation intent
         report_generated = False
-        if intent.intent in (IntentType.CUSTOMER_REPORT, IntentType.BUREAU_REPORT) and intent.customer_id:
-            is_bureau = intent.intent == IntentType.BUREAU_REPORT
-            label = "Generating bureau PDF report..." if is_bureau else "Generating PDF report..."
+        if intent.intent in (IntentType.CUSTOMER_REPORT, IntentType.BUREAU_REPORT, IntentType.COMBINED_REPORT) and intent.customer_id:
+            if intent.intent == IntentType.COMBINED_REPORT:
+                label = "Generating combined PDF report..."
+            elif intent.intent == IntentType.BUREAU_REPORT:
+                label = "Generating bureau PDF report..."
+            else:
+                label = "Generating PDF report..."
             render_stage_indicator(stage_placeholder, "execute", completed_stages, label)
 
-            if is_bureau:
+            if intent.intent == IntentType.COMBINED_REPORT:
+                success, result = generate_combined(intent.customer_id)
+            elif intent.intent == IntentType.BUREAU_REPORT:
                 success, result = generate_bureau_report(intent.customer_id)
             else:
                 success, result = generate_report(intent.customer_id)

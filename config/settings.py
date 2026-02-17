@@ -22,7 +22,7 @@ EXPLAINER_MODEL = "llama3.2"
 
 # Transaction data
 TRANSACTIONS_FILE = os.path.join(_PROJECT_ROOT, "data", "rgs.csv")
-TRANSACTIONS_DELIMITER = ","
+TRANSACTIONS_DELIMITER = "\t"
 
 # Bureau DPD tradeline data
 BUREAU_DPD_FILE = os.path.join(_PROJECT_ROOT, "dpd_data.csv")

@@ -112,7 +112,13 @@ class QueryPlanner:
                 IntentType.BUREAU_LOAN_COUNT, IntentType.BUREAU_DELINQUENCY,
                 IntentType.BUREAU_OVERVIEW,
             }
-            if intent.intent in bureau_intents:
+            if intent.intent == IntentType.COMBINED_REPORT:
+                # Combined report needs customer in both banking and bureau
+                if intent.customer_id not in self.valid_customers:
+                    return f"Customer {intent.customer_id} not found in banking data. Valid customers: {sorted(self.valid_customers)[:10]}"
+                if intent.customer_id not in self.valid_bureau_customers:
+                    return f"Customer {intent.customer_id} not found in bureau data. Valid CRNs: {sorted(self.valid_bureau_customers)[:10]}"
+            elif intent.intent in bureau_intents:
                 if intent.customer_id not in self.valid_bureau_customers:
                     return f"Customer {intent.customer_id} not found in bureau data. Valid CRNs: {sorted(self.valid_bureau_customers)[:10]}"
             elif intent.customer_id not in self.valid_customers:
@@ -190,7 +196,8 @@ class QueryPlanner:
             "get_cash_flow",
             "generate_customer_report",
             "generate_lender_profile",
-            "generate_bureau_report"
+            "generate_bureau_report",
+            "generate_combined_report"
         ]:
             args["customer_id"] = intent.customer_id
 
