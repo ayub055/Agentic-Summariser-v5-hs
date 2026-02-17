@@ -26,6 +26,21 @@ class KeyFinding:
     severity: str       # "high_risk", "moderate_risk", "concern", "positive", "neutral"
 
 
+def _timeline_str(vec: BureauLoanFeatureVector) -> str:
+    """Build a compact timeline string from a loan type's date range."""
+    parts = []
+    if vec.earliest_opened:
+        if vec.latest_opened and vec.earliest_opened != vec.latest_opened:
+            parts.append(f"Opened: {vec.earliest_opened} – {vec.latest_opened}")
+        else:
+            parts.append(f"Opened: {vec.earliest_opened}")
+    if vec.latest_closed:
+        parts.append(f"Last Closed: {vec.latest_closed}")
+    elif vec.live_count > 0:
+        parts.append("Active")
+    return " | ".join(parts)
+
+
 def extract_key_findings(
     executive_inputs: BureauExecutiveSummaryInputs,
     feature_vectors: Dict[LoanType, BureauLoanFeatureVector],
@@ -55,11 +70,11 @@ def extract_key_findings(
 
     # --- Tradeline behavioral findings ---
     if tradeline_features is not None:
-        findings.extend(_tradeline_findings(tradeline_features))
+        findings.extend(_tradeline_findings(tradeline_features, feature_vectors))
 
     # --- Composite / interaction findings ---
     if tradeline_features is not None:
-        findings.extend(_composite_findings(executive_inputs, tradeline_features))
+        findings.extend(_composite_findings(executive_inputs, tradeline_features, feature_vectors))
 
     # Sort: high_risk > moderate_risk > concern > neutral > positive
     severity_order = {"high_risk": 0, "moderate_risk": 1, "concern": 2, "neutral": 3, "positive": 4}
@@ -75,27 +90,35 @@ def _portfolio_findings(
     """Extract findings from portfolio-level data."""
     findings = []
 
-    # Delinquency flag
+    # Delinquency flag — find timeline of loan type with max DPD
+    dpd_timeline = ""
+    if ei.max_dpd_loan_type:
+        for lt, vec in vectors.items():
+            if get_loan_type_display_name(lt) == ei.max_dpd_loan_type:
+                tl = _timeline_str(vec)
+                if tl:
+                    dpd_timeline = f" [{ei.max_dpd_loan_type}: {tl}]"
+                break
+
     if ei.has_delinquency:
-        dpd_str = f" (Max DPD: {ei.max_dpd})" if ei.max_dpd is not None else ""
         if ei.max_dpd is not None and ei.max_dpd > 90:
             findings.append(KeyFinding(
                 category="Delinquency",
-                finding=f"Active delinquency detected with Max DPD of {ei.max_dpd} days",
+                finding=f"Active delinquency detected with Max DPD of {ei.max_dpd} days{dpd_timeline}",
                 inference="Severe delinquency indicates significant repayment stress; loan may be classified as NPA",
                 severity="high_risk",
             ))
         elif ei.max_dpd is not None and ei.max_dpd > 30:
             findings.append(KeyFinding(
                 category="Delinquency",
-                finding=f"Active delinquency detected with Max DPD of {ei.max_dpd} days",
+                finding=f"Active delinquency detected with Max DPD of {ei.max_dpd} days{dpd_timeline}",
                 inference="Significant past-due status suggests repayment difficulty; close monitoring required",
                 severity="moderate_risk",
             ))
         elif ei.max_dpd is not None and ei.max_dpd > 0:
             findings.append(KeyFinding(
                 category="Delinquency",
-                finding=f"Minor delinquency detected with Max DPD of {ei.max_dpd} days",
+                finding=f"Minor delinquency detected with Max DPD of {ei.max_dpd} days{dpd_timeline}",
                 inference="Early-stage past-due status; may reflect temporary cash flow mismatch",
                 severity="concern",
             ))
@@ -158,6 +181,8 @@ def _loan_type_findings(
 
     for loan_type, vec in vectors.items():
         lt_name = get_loan_type_display_name(loan_type)
+        tl = _timeline_str(vec)
+        tl_suffix = f" [{tl}]" if tl else ""
 
         # CC utilization (utilization_ratio is stored as 0-1; convert to %)
         if loan_type == LoanType.CC and vec.utilization_ratio is not None:
@@ -165,21 +190,21 @@ def _loan_type_findings(
             if util > 75:
                 findings.append(KeyFinding(
                     category="Utilization",
-                    finding=f"Credit card utilization at {util:.0f}%",
+                    finding=f"Credit card utilization at {util:.0f}%{tl_suffix}",
                     inference="Over-utilization of credit card limits signals high credit dependency and potential cash flow stress",
                     severity="high_risk",
                 ))
             elif util > 50:
                 findings.append(KeyFinding(
                     category="Utilization",
-                    finding=f"Credit card utilization at {util:.0f}%",
+                    finding=f"Credit card utilization at {util:.0f}%{tl_suffix}",
                     inference="Elevated utilization; approaching high-risk threshold for revolving credit",
                     severity="moderate_risk",
                 ))
             elif util <= 30:
                 findings.append(KeyFinding(
                     category="Utilization",
-                    finding=f"Credit card utilization at {util:.0f}%",
+                    finding=f"Credit card utilization at {util:.0f}%{tl_suffix}",
                     inference="Healthy utilization indicates disciplined credit card usage",
                     severity="positive",
                 ))
@@ -189,14 +214,14 @@ def _loan_type_findings(
             if vec.max_dpd > 90:
                 findings.append(KeyFinding(
                     category="Delinquency",
-                    finding=f"{lt_name}: Delinquent with Max DPD of {vec.max_dpd} days",
+                    finding=f"{lt_name}: Delinquent with Max DPD of {vec.max_dpd} days{tl_suffix}",
                     inference=f"Severe delinquency on {lt_name} account; may indicate deep financial distress",
                     severity="high_risk",
                 ))
             elif vec.max_dpd > 30:
                 findings.append(KeyFinding(
                     category="Delinquency",
-                    finding=f"{lt_name}: Delinquent with Max DPD of {vec.max_dpd} days",
+                    finding=f"{lt_name}: Delinquent with Max DPD of {vec.max_dpd} days{tl_suffix}",
                     inference=f"Significant past-due on {lt_name}; repayment discipline is compromised",
                     severity="moderate_risk",
                 ))
@@ -205,7 +230,7 @@ def _loan_type_findings(
         if vec.overdue_amount > 0:
             findings.append(KeyFinding(
                 category="Outstanding",
-                finding=f"{lt_name}: Overdue amount of INR {format_inr(vec.overdue_amount)}",
+                finding=f"{lt_name}: Overdue amount of INR {format_inr(vec.overdue_amount)}{tl_suffix}",
                 inference=f"Active overdue balance on {lt_name} indicates unresolved payment obligation",
                 severity="concern",
             ))
@@ -215,7 +240,7 @@ def _loan_type_findings(
             events = ", ".join(vec.forced_event_flags)
             findings.append(KeyFinding(
                 category="Adverse Events",
-                finding=f"{lt_name}: Forced events detected — {events}",
+                finding=f"{lt_name}: Forced events detected — {events}{tl_suffix}",
                 inference=f"Adverse credit events on {lt_name} are strong negative signals for creditworthiness",
                 severity="high_risk",
             ))
@@ -223,23 +248,35 @@ def _loan_type_findings(
     return findings
 
 
-def _tradeline_findings(tf: TradelineFeatures) -> List[KeyFinding]:
+def _tradeline_findings(
+    tf: TradelineFeatures,
+    vectors: Optional[Dict[LoanType, BureauLoanFeatureVector]] = None,
+) -> List[KeyFinding]:
     """Extract findings from pre-computed tradeline features."""
     findings = []
+
+    # Helper to look up timeline for CC or PL from vectors
+    def _lt_timeline(lt: LoanType) -> str:
+        if vectors and lt in vectors:
+            tl = _timeline_str(vectors[lt])
+            return f" [{tl}]" if tl else ""
+        return ""
+
+    pl_tl = _lt_timeline(LoanType.PL)
 
     # --- Loan Activity ---
     if tf.new_trades_6m_pl is not None:
         if tf.new_trades_6m_pl >= 3:
             findings.append(KeyFinding(
                 category="Loan Activity",
-                finding=f"{tf.new_trades_6m_pl} new personal loan trades opened in last 6 months",
+                finding=f"{tf.new_trades_6m_pl} new personal loan trades opened in last 6 months{pl_tl}",
                 inference="Rapid PL acquisition suggests urgent credit need or loan stacking behavior",
                 severity="high_risk",
             ))
         elif tf.new_trades_6m_pl >= 2:
             findings.append(KeyFinding(
                 category="Loan Activity",
-                finding=f"{tf.new_trades_6m_pl} new personal loan trades opened in last 6 months",
+                finding=f"{tf.new_trades_6m_pl} new personal loan trades opened in last 6 months{pl_tl}",
                 inference="Multiple recent PL acquisitions; monitor for emerging over-leverage",
                 severity="moderate_risk",
             ))
@@ -247,37 +284,40 @@ def _tradeline_findings(tf: TradelineFeatures) -> List[KeyFinding]:
     if tf.months_since_last_trade_pl is not None and tf.months_since_last_trade_pl < 2:
         findings.append(KeyFinding(
             category="Loan Activity",
-            finding=f"Last PL trade opened {tf.months_since_last_trade_pl:.1f} months ago",
+            finding=f"Last PL trade opened {tf.months_since_last_trade_pl:.1f} months ago{pl_tl}",
             inference="Very recent PL activity indicates active credit seeking",
             severity="concern",
         ))
 
     # --- DPD & Delinquency ---
-    for field_name, label in [
-        ("max_dpd_6m_cc", "Credit Card (6M)"),
-        ("max_dpd_6m_pl", "Personal Loan (6M)"),
-        ("max_dpd_9m_cc", "Credit Card (9M)"),
-    ]:
+    # Map field name to (label, LoanType) for timeline lookup
+    dpd_field_map = [
+        ("max_dpd_6m_cc", "Credit Card (6M)", LoanType.CC),
+        ("max_dpd_6m_pl", "Personal Loan (6M)", LoanType.PL),
+        ("max_dpd_9m_cc", "Credit Card (9M)", LoanType.CC),
+    ]
+    for field_name, label, lt in dpd_field_map:
         val = getattr(tf, field_name, None)
+        lt_tl = _lt_timeline(lt)
         if val is not None and val > 0:
             if val > 90:
                 findings.append(KeyFinding(
                     category="DPD & Delinquency",
-                    finding=f"Max DPD for {label}: {val} days",
+                    finding=f"Max DPD for {label}: {val} days{lt_tl}",
                     inference=f"Severe delinquency on {label} — strong negative indicator",
                     severity="high_risk",
                 ))
             elif val > 30:
                 findings.append(KeyFinding(
                     category="DPD & Delinquency",
-                    finding=f"Max DPD for {label}: {val} days",
+                    finding=f"Max DPD for {label}: {val} days{lt_tl}",
                     inference=f"Significant past-due on {label}; repayment under stress",
                     severity="moderate_risk",
                 ))
             else:
                 findings.append(KeyFinding(
                     category="DPD & Delinquency",
-                    finding=f"Max DPD for {label}: {val} days",
+                    finding=f"Max DPD for {label}: {val} days{lt_tl}",
                     inference=f"Minor past-due on {label}; may be a temporary delay",
                     severity="concern",
                 ))
@@ -441,9 +481,20 @@ def _tradeline_findings(tf: TradelineFeatures) -> List[KeyFinding]:
 def _composite_findings(
     ei: BureauExecutiveSummaryInputs,
     tf: TradelineFeatures,
+    vectors: Optional[Dict[LoanType, BureauLoanFeatureVector]] = None,
 ) -> List[KeyFinding]:
     """Extract findings from feature interactions (multi-feature signals)."""
     findings = []
+
+    # Timeline helpers
+    def _lt_timeline(lt: LoanType) -> str:
+        if vectors and lt in vectors:
+            tl = _timeline_str(vectors[lt])
+            return f" [{tl}]" if tl else ""
+        return ""
+
+    pl_tl = _lt_timeline(LoanType.PL)
+    cc_tl = _lt_timeline(LoanType.CC)
 
     enquiries = tf.unsecured_enquiries_12m
     new_pl_6m = tf.new_trades_6m_pl
@@ -453,7 +504,7 @@ def _composite_findings(
     if enquiries is not None and enquiries > 10 and new_pl_6m is not None and new_pl_6m >= 2:
         findings.append(KeyFinding(
             category="Composite Signal",
-            finding=f"High enquiry volume ({enquiries} in 12M) combined with {new_pl_6m} new PL trades in 6M",
+            finding=f"High enquiry volume ({enquiries} in 12M) combined with {new_pl_6m} new PL trades in 6M{pl_tl}",
             inference="Credit hungry behavior with active loan stacking — elevated risk of debt spiral",
             severity="high_risk",
         ))
@@ -462,7 +513,7 @@ def _composite_findings(
     if ipt_plbl is not None and ipt_plbl < 2 and new_pl_6m is not None and new_pl_6m >= 2:
         findings.append(KeyFinding(
             category="Composite Signal",
-            finding=f"Avg {ipt_plbl:.1f} months between PL/BL with {new_pl_6m} new trades in 6M",
+            finding=f"Avg {ipt_plbl:.1f} months between PL/BL with {new_pl_6m} new trades in 6M{pl_tl}",
             inference="Rapid PL stacking pattern — borrower is accumulating unsecured debt at an accelerating pace",
             severity="high_risk",
         ))
@@ -473,7 +524,7 @@ def _composite_findings(
     if cc_util is not None and cc_util > 50 and pl_bal is not None and pl_bal > 50:
         findings.append(KeyFinding(
             category="Composite Signal",
-            finding=f"CC utilization at {cc_util:.1f}% and PL balance remaining at {pl_bal:.1f}%",
+            finding=f"CC utilization at {cc_util:.1f}%{cc_tl} and PL balance remaining at {pl_bal:.1f}%{pl_tl}",
             inference="Elevated leverage across both revolving and term products; limited debt servicing headroom",
             severity="moderate_risk",
         ))

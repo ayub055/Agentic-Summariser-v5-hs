@@ -33,6 +33,10 @@ class BureauLoanFeatureVector:
 
     utilization_ratio: Optional[float] = None  # CC only
 
+    earliest_opened: Optional[str] = None   # e.g. "Dec 2019"
+    latest_opened: Optional[str] = None     # e.g. "Nov 2025"
+    latest_closed: Optional[str] = None     # e.g. "Apr 2025", None if all live
+
     forced_event_flags: List[str] = field(default_factory=list)
     on_us_count: int = 0
     off_us_count: int = 0

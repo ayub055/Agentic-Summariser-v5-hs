@@ -65,13 +65,16 @@ def _safe_int(value: str, default: int = 0) -> int:
 
 
 def _parse_date(value: str) -> Optional[date]:
-    """Parse a date string (YYYY-MM-DD) safely."""
+    """Parse a date string safely. Tries DD-MM-YYYY first, then YYYY-MM-DD."""
     if not value or value.strip().upper() in ("NULL", ""):
         return None
-    try:
-        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
+    cleaned = value.strip().split(" ")[0]  # strip time part like "30-04-2024 00:00"
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except (ValueError, TypeError):
+            continue
+    return None
 
 
 def _compute_months_since_last_payment(tradelines: List[dict]) -> Optional[int]:
@@ -205,6 +208,17 @@ def _build_feature_vector(
     # Months since last payment
     months_since_last_payment = _compute_months_since_last_payment(tradelines)
 
+    # Timeline: earliest/latest opened and latest closed
+    opened_dates = [_parse_date(tl.get("date_opened", "")) for tl in tradelines]
+    closed_dates = [_parse_date(tl.get("date_closed", "")) for tl in tradelines]
+    valid_opened = [d for d in opened_dates if d is not None]
+    valid_closed = [d for d in closed_dates if d is not None]
+
+    _month_fmt = lambda d: d.strftime("%b %Y")  # e.g. "Dec 2019"
+    earliest_opened = _month_fmt(min(valid_opened)) if valid_opened else None
+    latest_opened = _month_fmt(max(valid_opened)) if valid_opened else None
+    latest_closed = _month_fmt(max(valid_closed)) if valid_closed else None
+
     return BureauLoanFeatureVector(
         loan_type=loan_type,
         secured=secured,
@@ -220,6 +234,9 @@ def _build_feature_vector(
         max_dpd_months_ago=max_dpd_months_ago,
         overdue_amount=overdue_amount,
         utilization_ratio=utilization_ratio,
+        earliest_opened=earliest_opened,
+        latest_opened=latest_opened,
+        latest_closed=latest_closed,
         forced_event_flags=forced_event_flags,
         on_us_count=on_us_count,
         off_us_count=off_us_count,
