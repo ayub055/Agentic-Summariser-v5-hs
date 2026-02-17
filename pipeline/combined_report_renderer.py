@@ -34,6 +34,7 @@ class CombinedReportPDF(ReportPDF):
 def _build_combined_pdf(
     customer_report: CustomerReport,
     bureau_report: BureauReport,
+    combined_summary: Optional[str] = None,
 ) -> FPDF:
     """Build a single PDF document from both reports."""
     pdf = CombinedReportPDF()
@@ -53,6 +54,12 @@ def _build_combined_pdf(
     pdf.key_value("Currency", customer_report.meta.currency)
     pdf.key_value("Transactions", str(customer_report.meta.transaction_count))
     pdf.ln(5)
+
+    # Combined Executive Summary (synthesised from both reports)
+    if combined_summary:
+        pdf.section_title("Combined Executive Summary")
+        pdf.section_text(combined_summary)
+        pdf.ln(3)
 
     # Customer Profile (LLM persona)
     if customer_report.customer_persona:
@@ -313,6 +320,7 @@ def render_combined_report(
     customer_report: CustomerReport,
     bureau_report: BureauReport,
     output_path: Optional[str] = None,
+    combined_summary: Optional[str] = None,
 ) -> str:
     """Render combined PDF + HTML from both reports.
 
@@ -321,6 +329,7 @@ def render_combined_report(
         bureau_report: Fully populated BureauReport.
         output_path: Desired output file path (.pdf).
                       Defaults to reports/combined_{customer_id}_report.pdf.
+        combined_summary: LLM-generated synthesised executive summary.
 
     Returns:
         Path where PDF was saved.
@@ -332,12 +341,14 @@ def render_combined_report(
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     # Build and save PDF
-    pdf = _build_combined_pdf(customer_report, bureau_report)
+    pdf = _build_combined_pdf(customer_report, bureau_report, combined_summary)
     pdf.output(str(output_file))
 
     # Also save HTML version
     html_path = str(output_file).replace(".pdf", ".html")
-    html_content = render_combined_report_html(customer_report, bureau_report)
+    html_content = render_combined_report_html(
+        customer_report, bureau_report, combined_summary=combined_summary
+    )
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
@@ -347,6 +358,7 @@ def render_combined_report(
 def render_combined_report_html(
     customer_report: CustomerReport,
     bureau_report: BureauReport,
+    combined_summary: Optional[str] = None,
 ) -> str:
     """Render combined HTML from both reports using Jinja2 template.
 
@@ -384,4 +396,5 @@ def render_combined_report_html(
         vectors_data=vectors_data,
         tl_features=tl_features_data,
         key_findings=key_findings_data,
+        combined_summary=combined_summary,
     )

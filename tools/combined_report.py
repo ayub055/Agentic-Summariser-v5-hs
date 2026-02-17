@@ -37,8 +37,23 @@ def generate_combined_report_pdf(
     # 2. Bureau report
     bureau_report, _ = generate_bureau_report_pdf(customer_id)
 
+    # 2.5 Generate combined executive summary (fail-soft)
+    combined_summary = None
+    try:
+        from pipeline.report_summary_chain import generate_combined_executive_summary
+        from utils.helpers import mask_customer_id
+        combined_summary = generate_combined_executive_summary(
+            banking_summary=customer_report.customer_review or "",
+            bureau_summary=bureau_report.narrative or "",
+            customer_id=mask_customer_id(customer_id),
+        )
+    except Exception as e:
+        logger.warning(f"Combined executive summary generation failed: {e}")
+
     # 3. Combined rendering
     from pipeline.combined_report_renderer import render_combined_report
-    pdf_path = render_combined_report(customer_report, bureau_report)
+    pdf_path = render_combined_report(
+        customer_report, bureau_report, combined_summary=combined_summary
+    )
 
     return customer_report, bureau_report, pdf_path

@@ -208,6 +208,19 @@
     </div>
 
     {# ================================================================== #}
+    {# COMBINED EXECUTIVE SUMMARY (synthesised from both reports)          #}
+    {# ================================================================== #}
+
+    {% if combined_summary %}
+    <div class="section">
+        <h3>Combined Executive Summary</h3>
+        <div class="summary-box" style="border-left: 4px solid #2c3e50;">
+            <p>{{ combined_summary }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {# ================================================================== #}
     {# PART 1: BANKING / TRANSACTION REPORT                               #}
     {# ================================================================== #}
 

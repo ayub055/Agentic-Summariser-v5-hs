@@ -758,3 +758,70 @@ def generate_bureau_review(
         return review.strip() if review else None
     except Exception:
         return None
+
+
+# ---------------------------------------------------------------------------
+# Combined Executive Summary (banking + bureau synthesised)
+# ---------------------------------------------------------------------------
+
+COMBINED_EXECUTIVE_PROMPT = """Prepare a synthesised executive summary for customer {customer_id} \
+by merging the banking transaction analysis and credit-bureau tradeline analysis below into \
+ONE cohesive paragraph (6-8 lines).
+
+STRICT RULES:
+- Write in formal third-person tone throughout (e.g. "The customer exhibits…", never "we" or "I")
+- Do NOT repeat the source summaries verbatim — distil and merge the key points
+- Cover: income & cash-flow health, spending discipline, credit-portfolio exposure, \
+payment behaviour / DPD, and an overall creditworthiness assessment
+- If either summary is empty or missing, work with whatever is available
+- Be factual — do not invent numbers that are not present in the inputs
+- End with a clear one-line creditworthiness assessment (positive, cautious, or negative)
+- Do NOT add any meta-commentary, personal notes, disclaimers, or remarks about the writing \
+process — output ONLY the summary paragraph followed by the standard note below
+
+After the summary paragraph, add exactly this note on a new line:
+Note: This is a synthesised summary based on automated banking and bureau analyses. \
+Independent verification is recommended before final credit decisions.
+
+BANKING SUMMARY:
+{banking_summary}
+
+BUREAU SUMMARY:
+{bureau_summary}
+
+Write the combined executive summary:"""
+
+
+def generate_combined_executive_summary(
+    banking_summary: str,
+    bureau_summary: str,
+    customer_id: str,
+    model_name: str = SUMMARY_MODEL,
+) -> Optional[str]:
+    """Generate a unified executive summary from both banking and bureau narratives.
+
+    Args:
+        banking_summary: The customer_review text from the banking report.
+        bureau_summary: The narrative text from the bureau report.
+        customer_id: Masked customer identifier.
+        model_name: Ollama model to use.
+
+    Returns:
+        Synthesised summary string, or None if generation fails.
+    """
+    if not banking_summary and not bureau_summary:
+        return None
+
+    try:
+        prompt = ChatPromptTemplate.from_template(COMBINED_EXECUTIVE_PROMPT)
+        llm = ChatOllama(model=model_name, temperature=0, seed=42)
+        chain = prompt | llm | StrOutputParser()
+
+        result = chain.invoke({
+            "customer_id": customer_id,
+            "banking_summary": banking_summary or "(not available)",
+            "bureau_summary": bureau_summary or "(not available)",
+        })
+        return result.strip() if result else None
+    except Exception:
+        return None
