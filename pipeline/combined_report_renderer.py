@@ -71,132 +71,16 @@ def _build_combined_pdf(
         pdf.key_value("Tradelines", str(bureau_report.executive_inputs.total_tradelines))
     pdf.ln(5)
 
-    # Combined Executive Summary (synthesised from both reports)
-    if combined_summary:
-        pdf.section_title("Combined Executive Summary")
-        pdf.section_text(combined_summary)
-        pdf.ln(3)
-
     # =====================================================================
-    # PART 1: BANKING / TRANSACTION REPORT
+    # PART 1: BUREAU REPORT
     # =====================================================================
 
-    if customer_report:
-        # Customer Profile (LLM persona)
-        if customer_report.customer_persona:
-            pdf.section_title("Customer Profile")
-            pdf.section_text(customer_report.customer_persona)
-            pdf.ln(3)
-
-        # Executive Summary (LLM review)
-        if customer_report.customer_review:
-            pdf.section_title("Executive Summary")
-            pdf.section_text(customer_report.customer_review)
-            pdf.ln(3)
-
-        # Salary
-        if customer_report.salary:
-            pdf.section_title("Salary Information")
-            pdf.key_value("Average Amount", f"{customer_report.salary.avg_amount:,.2f} {customer_report.meta.currency}")
-            pdf.key_value("Frequency", f"{customer_report.salary.frequency} transactions")
-            if customer_report.salary.narration:
-                pdf.key_value("Description", customer_report.salary.narration[:50])
-            if customer_report.salary.latest_transaction:
-                latest = customer_report.salary.latest_transaction
-                pdf.key_value("Latest Transaction", f"{latest.get('amount', 0):,.2f} {customer_report.meta.currency}")
-                pdf.key_value("Latest Date", latest.get('date', 'N/A')[:10])
-            pdf.ln(3)
-
-        # Category Overview
-        if customer_report.category_overview:
-            pdf.section_title("Spending by Category")
-            sorted_cats = sorted(customer_report.category_overview.items(), key=lambda x: x[1], reverse=True)
-            widths = [80, 50, 60]
-            pdf.table_header(["Category", "Amount", "% of Total"], widths)
-            total = sum(customer_report.category_overview.values())
-            for cat, amount in sorted_cats:
-                pct = (amount / total * 100) if total > 0 else 0
-                pdf.table_row([cat, f"{amount:,.0f}", f"{pct:.1f}%"], widths)
-            pdf.ln(5)
-
-        # Monthly Cash Flow
-        if customer_report.monthly_cashflow:
-            pdf.section_title("Monthly Cash Flow")
-            widths = [40, 45, 45, 45]
-            pdf.table_header(["Month", "Inflow", "Outflow", "Net"], widths)
-            for m in customer_report.monthly_cashflow:
-                pdf.table_row([
-                    m.get("month", "N/A"),
-                    f"{m.get('inflow', 0):,.0f}",
-                    f"{m.get('outflow', 0):,.0f}",
-                    f"{m.get('net', 0):,.0f}"
-                ], widths)
-            total_in = sum(m.get('inflow', 0) for m in customer_report.monthly_cashflow)
-            total_out = sum(m.get('outflow', 0) for m in customer_report.monthly_cashflow)
-            pdf.set_font("Helvetica", "B", 9)
-            pdf.cell(40, 6, "TOTAL", border=1, align="C")
-            pdf.cell(45, 6, f"{total_in:,.0f}", border=1, align="C")
-            pdf.cell(45, 6, f"{total_out:,.0f}", border=1, align="C")
-            pdf.cell(45, 6, f"{total_in - total_out:,.0f}", border=1, align="C")
-            pdf.ln(8)
-
-        # EMI Payments
-        if customer_report.emis:
-            pdf.section_title("EMI Payments")
-            widths = [80, 50, 60]
-            pdf.table_header(["Name", "Amount", "Frequency"], widths)
-            for emi in customer_report.emis:
-                pdf.table_row([emi.name, f"{emi.amount:,.2f}", f"{emi.frequency}x"], widths)
-            pdf.ln(3)
-
-        # Rent
-        if customer_report.rent:
-            pdf.section_title("Rent")
-            pdf.key_value("Direction", customer_report.rent.direction.capitalize())
-            pdf.key_value("Amount", f"{customer_report.rent.amount:,.2f} {customer_report.meta.currency}")
-            pdf.key_value("Frequency", f"{customer_report.rent.frequency} transactions")
-            pdf.ln(3)
-
-        # Utility Bills
-        if customer_report.bills:
-            pdf.section_title("Utility Bills")
-            widths = [80, 50, 60]
-            pdf.table_header(["Type", "Avg Amount", "Frequency"], widths)
-            for bill in customer_report.bills:
-                pdf.table_row([bill.bill_type, f"{bill.avg_amount:,.2f}", f"{bill.frequency}x"], widths)
-            pdf.ln(3)
-
-        # Top Merchants
-        if customer_report.top_merchants:
-            pdf.section_title("Top Merchants")
-            widths = [70, 30, 45, 45]
-            pdf.table_header(["Merchant", "Count", "Total", "Avg"], widths)
-            for m in customer_report.top_merchants:
-                pdf.table_row([
-                    str(m.get("name", "N/A"))[:25],
-                    str(m.get("count", 0)),
-                    f"{m.get('total', 0):,.0f}",
-                    f"{m.get('avg', 0):,.0f}"
-                ], widths)
-            pdf.ln(5)
-    else:
-        pdf.section_title("Banking / Transaction Report")
-        _render_absence_note(pdf, "Banking transaction")
-
-    # =====================================================================
-    # DIVIDER
-    # =====================================================================
-    pdf.add_page()
     pdf.set_font("Helvetica", "B", 14)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(0, 12, "  Bureau Tradeline Analysis", fill=True, new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.ln(8)
-
-    # =====================================================================
-    # PART 2: BUREAU REPORT
-    # =====================================================================
 
     if bureau_report:
         ei = bureau_report.executive_inputs
@@ -339,6 +223,136 @@ def _build_combined_pdf(
             _render_feature_pair(pdf, "Avg Interpurchase Time 12M (Consumer Loan)", tf.interpurchase_time_12m_cl)
     else:
         _render_absence_note(pdf, "Bureau tradeline")
+
+    # =====================================================================
+    # DIVIDER
+    # =====================================================================
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_fill_color(44, 62, 80)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 12, "  Banking / Transaction Report", fill=True, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(8)
+
+    # =====================================================================
+    # PART 2: BANKING / TRANSACTION REPORT
+    # =====================================================================
+
+    if customer_report:
+        # Customer Profile (LLM persona)
+        if customer_report.customer_persona:
+            pdf.section_title("Customer Profile")
+            pdf.section_text(customer_report.customer_persona)
+            pdf.ln(3)
+
+        # Executive Summary (LLM review)
+        if customer_report.customer_review:
+            pdf.section_title("Executive Summary")
+            pdf.section_text(customer_report.customer_review)
+            pdf.ln(3)
+
+        # Salary
+        if customer_report.salary:
+            pdf.section_title("Salary Information")
+            pdf.key_value("Average Amount", f"{customer_report.salary.avg_amount:,.2f} {customer_report.meta.currency}")
+            pdf.key_value("Frequency", f"{customer_report.salary.frequency} transactions")
+            if customer_report.salary.narration:
+                pdf.key_value("Description", customer_report.salary.narration[:50])
+            if customer_report.salary.latest_transaction:
+                latest = customer_report.salary.latest_transaction
+                pdf.key_value("Latest Transaction", f"{latest.get('amount', 0):,.2f} {customer_report.meta.currency}")
+                pdf.key_value("Latest Date", latest.get('date', 'N/A')[:10])
+            pdf.ln(3)
+
+        # Category Overview
+        if customer_report.category_overview:
+            pdf.section_title("Spending by Category")
+            sorted_cats = sorted(customer_report.category_overview.items(), key=lambda x: x[1], reverse=True)
+            widths = [80, 50, 60]
+            pdf.table_header(["Category", "Amount", "% of Total"], widths)
+            total = sum(customer_report.category_overview.values())
+            for cat, amount in sorted_cats:
+                pct = (amount / total * 100) if total > 0 else 0
+                pdf.table_row([cat, f"{amount:,.0f}", f"{pct:.1f}%"], widths)
+            pdf.ln(5)
+
+        # Monthly Cash Flow
+        if customer_report.monthly_cashflow:
+            pdf.section_title("Monthly Cash Flow")
+            widths = [40, 45, 45, 45]
+            pdf.table_header(["Month", "Inflow", "Outflow", "Net"], widths)
+            for m in customer_report.monthly_cashflow:
+                pdf.table_row([
+                    m.get("month", "N/A"),
+                    f"{m.get('inflow', 0):,.0f}",
+                    f"{m.get('outflow', 0):,.0f}",
+                    f"{m.get('net', 0):,.0f}"
+                ], widths)
+            total_in = sum(m.get('inflow', 0) for m in customer_report.monthly_cashflow)
+            total_out = sum(m.get('outflow', 0) for m in customer_report.monthly_cashflow)
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.cell(40, 6, "TOTAL", border=1, align="C")
+            pdf.cell(45, 6, f"{total_in:,.0f}", border=1, align="C")
+            pdf.cell(45, 6, f"{total_out:,.0f}", border=1, align="C")
+            pdf.cell(45, 6, f"{total_in - total_out:,.0f}", border=1, align="C")
+            pdf.ln(8)
+
+        # EMI Payments
+        if customer_report.emis:
+            pdf.section_title("EMI Payments")
+            widths = [80, 50, 60]
+            pdf.table_header(["Name", "Amount", "Frequency"], widths)
+            for emi in customer_report.emis:
+                pdf.table_row([emi.name, f"{emi.amount:,.2f}", f"{emi.frequency}x"], widths)
+            pdf.ln(3)
+
+        # Rent
+        if customer_report.rent:
+            pdf.section_title("Rent")
+            pdf.key_value("Direction", customer_report.rent.direction.capitalize())
+            pdf.key_value("Amount", f"{customer_report.rent.amount:,.2f} {customer_report.meta.currency}")
+            pdf.key_value("Frequency", f"{customer_report.rent.frequency} transactions")
+            pdf.ln(3)
+
+        # Utility Bills
+        if customer_report.bills:
+            pdf.section_title("Utility Bills")
+            widths = [80, 50, 60]
+            pdf.table_header(["Type", "Avg Amount", "Frequency"], widths)
+            for bill in customer_report.bills:
+                pdf.table_row([bill.bill_type, f"{bill.avg_amount:,.2f}", f"{bill.frequency}x"], widths)
+            pdf.ln(3)
+
+        # Top Merchants
+        if customer_report.top_merchants:
+            pdf.section_title("Top Merchants")
+            widths = [70, 30, 45, 45]
+            pdf.table_header(["Merchant", "Count", "Total", "Avg"], widths)
+            for m in customer_report.top_merchants:
+                pdf.table_row([
+                    str(m.get("name", "N/A"))[:25],
+                    str(m.get("count", 0)),
+                    f"{m.get('total', 0):,.0f}",
+                    f"{m.get('avg', 0):,.0f}"
+                ], widths)
+            pdf.ln(5)
+    else:
+        _render_absence_note(pdf, "Banking transaction")
+
+    # =====================================================================
+    # PART 3: COMBINED EXECUTIVE SUMMARY
+    # =====================================================================
+    if combined_summary:
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_fill_color(44, 62, 80)
+        pdf.set_text_color(255, 255, 255)
+        pdf.cell(0, 12, "  Combined Executive Summary", fill=True, new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(8)
+        pdf.section_text(combined_summary)
+        pdf.ln(3)
 
     return pdf
 
